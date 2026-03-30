@@ -1,0 +1,15 @@
+{
+  "name": "echat-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "npm run build --prefix server && npm run build --prefix client",
+    "start": "concurrently \"npm run start --prefix server\" \"npm run preview --prefix client\"",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

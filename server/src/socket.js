@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { SOCKET_EVENTS } from "@wechat/shared/events";
+import { SOCKET_EVENTS } from "@echat/shared/events";
 import { UserSession } from "./models/UserSession.js";
 import { Message } from "./models/Message.js";
 import { verifySocketAdminToken } from "./middleware/auth.js";

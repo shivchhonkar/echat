@@ -1,31 +1,51 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SOCKET_EVENTS } from "@wechat/shared/events";
+import { SOCKET_EVENTS } from "@echat/shared/events";
 import { createUserSocket } from "../socket";
 import { getAdminStatus, getMessages, startSession } from "../api";
 import MessageList from "../components/MessageList";
+import { toast } from "../utils/toast";
 
 export default function WidgetPage() {
-  const tenantKey = useMemo(
-    () => window.WeChatSupportConfig?.tenantKey || import.meta.env.VITE_TENANT_KEY || "default-key",
+  const isEmbedMode = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("embed") === "1";
+  }, []);
+  const tenantKeyFromQuery = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("tenantKey") || params.get("widgetKey") || "";
+  }, []);
+  const supportConfig = useMemo(
+    () => window.EchatConfig || window.WeChatSupportConfig || {},
     []
   );
+  const tenantKey = useMemo(
+    () => tenantKeyFromQuery || supportConfig.tenantKey || supportConfig.widgetKey || import.meta.env.VITE_TENANT_KEY || "default-key",
+    [supportConfig, tenantKeyFromQuery]
+  );
   const STORAGE_KEY = `support_widget_session:${tenantKey}`;
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(isEmbedMode ? true : false);
   const [sessionId, setSessionId] = useState(localStorage.getItem(STORAGE_KEY) || "");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [adminOnline, setAdminOnline] = useState(false);
   const [messages, setMessages] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [text, setText] = useState("");
   const [typing, setTyping] = useState(false);
   const [connected, setConnected] = useState(false);
   const socketRef = useRef(null);
   const typingTimer = useRef(null);
+  const openRef = useRef(open);
 
   useEffect(() => {
     getAdminStatus(tenantKey).then((r) => setAdminOnline(!!r.online)).catch(() => null);
   }, [tenantKey]);
+
+  useEffect(() => {
+    openRef.current = open;
+    if (open) setUnreadCount(0);
+  }, [open]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -39,6 +59,9 @@ export default function WidgetPage() {
     socket.on(SOCKET_EVENTS.NEW_MESSAGE, (msg) => {
       if (String(msg.sessionId) !== String(sessionId)) return;
       setMessages((prev) => [...prev, msg]);
+      if (msg.sender === "admin" && !openRef.current) {
+        setUnreadCount((prev) => prev + 1);
+      }
     });
     socket.on(SOCKET_EVENTS.TYPING, ({ sender, isTyping }) => {
       if (sender === "admin") setTyping(!!isTyping);
@@ -50,18 +73,49 @@ export default function WidgetPage() {
 
   const canStart = useMemo(() => name.trim().length > 1, [name]);
 
+  useEffect(() => {
+    if (!isEmbedMode) return;
+    window.parent?.postMessage(
+      {
+        source: "echat-widget",
+        type: "toggle",
+        open,
+      },
+      "*"
+    );
+  }, [isEmbedMode, open]);
+
+  useEffect(() => {
+    if (!isEmbedMode) return;
+    const htmlOverflow = document.documentElement.style.overflow;
+    const bodyOverflow = document.body.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.documentElement.style.overflow = htmlOverflow;
+      document.body.style.overflow = bodyOverflow;
+    };
+  }, [isEmbedMode]);
+
   async function handleStart(e) {
     e.preventDefault();
-    if (!canStart) return;
-    const result = await startSession({ name, email, phone, pageUrl: window.location.href, tenantKey });
-    const sid = String(result.sessionId);
-    localStorage.setItem(STORAGE_KEY, sid);
-    setSessionId(sid);
+    if (!canStart) return toast.error("Please enter your name to start chat");
+    try {
+      const result = await startSession({ name, email, phone, pageUrl: window.location.href, tenantKey });
+      const sid = String(result.sessionId);
+      localStorage.setItem(STORAGE_KEY, sid);
+      setSessionId(sid);
+      toast.success("Chat started successfully");
+    } catch (err) {
+      toast.error(err.message || "Failed to start chat");
+    }
   }
 
   function sendMessage(e) {
     e.preventDefault();
-    if (!text.trim() || !socketRef.current || !sessionId) return;
+    if (!sessionId) return toast.error("Start chat before sending message");
+    if (!text.trim()) return toast.error("Message cannot be empty");
+    if (!socketRef.current) return toast.error("Connection not ready");
     socketRef.current.emit(SOCKET_EVENTS.SEND_MESSAGE, { sessionId, message: text.trim() });
     setText("");
     socketRef.current.emit(SOCKET_EVENTS.TYPING, { sessionId, isTyping: false });
@@ -79,9 +133,34 @@ export default function WidgetPage() {
 
   return (
     <>
-      <button className="chat-fab" onClick={() => setOpen((p) => !p)}>💬</button>
+      {!open ? (
+        <button
+          type="button"
+          className={`chat-fab ${isEmbedMode ? "embed" : ""}`}
+          onClick={() => setOpen(true)}
+          aria-label={
+            unreadCount > 0
+              ? `Open chat, ${unreadCount > 99 ? "99 plus" : unreadCount} unread message${unreadCount === 1 ? "" : "s"}`
+              : "Open chat"
+          }
+        >
+          <span className="chat-fab-icon" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+            </svg>
+          </span>
+          {unreadCount > 0 ? (
+            <span className="chat-fab-badge" aria-hidden="true">
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
+          ) : null}
+        </button>
+      ) : null}
       {open ? (
-        <div className="chat-widget">
+        <div className={`chat-widget ${isEmbedMode ? "embed" : ""}`}>
+          <button className="chat-close-btn" onClick={() => setOpen(false)} aria-label="Close chat">
+            ✕
+          </button>
           {!sessionId ? (
             <form onSubmit={handleStart} className="chat-form">
               <h3>Need help?</h3>

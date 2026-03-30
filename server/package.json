@@ -1,14 +1,15 @@
 {
-  "name": "wechat-support-server",
+  "name": "echat-server",
   "version": "1.0.0",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "build": "node -e \"console.log('Server build: no compile step required')\""
   },
   "dependencies": {
-    "@wechat/shared": "file:../shared",
+    "@echat/shared": "file:../shared",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",

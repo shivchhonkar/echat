@@ -148,10 +148,23 @@ From `.env`:
   - `slug` (used by tenant admin login)
   - `widgetKey` (used by customer widget embedding)
 - Widget must send `tenantKey` on session start.
+- You can pass either `tenantKey` or `widgetKey` in global config.
 - Admin panel login uses `tenantSlug + admin email/password`.
 - Super admin can view all tenant usage and update subscription plans.
 - `DEFAULT_TENANT_SLUG`
 - `DEFAULT_TENANT_WIDGET_KEY`
+
+### Easy Install Snippet (for any application)
+
+```html
+<script>
+  window.WeChatSupportConfig = {
+    tenantSlug: "billint",
+    widgetKey: "billint-z1an30"
+  };
+</script>
+<script src="http://localhost:5173/embed.js" async></script>
+```
 
 ## Notes
 

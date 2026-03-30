@@ -16,18 +16,20 @@ export default function MessageList({ messages, me, typingText }) {
 
   return (
     <div ref={listRef} className="messages">
-      {messages.map((m) => {
-        const mine = m.sender === me;
-        return (
-          <div key={m._id || `${m.sender}-${m.timestamp}-${m.message}`} className={`bubble-row ${mine ? "mine" : ""}`}>
-            <div className={`bubble ${mine ? "mine" : ""}`}>
-              <p>{m.message}</p>
-              <span>{formatTime(m.timestamp)}</span>
+      <div className="messages-content">
+        {messages.map((m) => {
+          const mine = m.sender === me;
+          return (
+            <div key={m._id || `${m.sender}-${m.timestamp}-${m.message}`} className={`bubble-row ${mine ? "mine" : ""}`}>
+              <div className={`bubble ${mine ? "mine" : ""}`}>
+                <p>{m.message}</p>
+                <span>{formatTime(m.timestamp)}</span>
+              </div>
             </div>
-          </div>
-        );
-      })}
-      {typingText ? <div className="typing">{typingText}</div> : null}
+          );
+        })}
+        {typingText ? <div className="typing">{typingText}</div> : null}
+      </div>
     </div>
   );
 }

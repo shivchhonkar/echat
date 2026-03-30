@@ -1,7 +1,7 @@
 services:
   mongodb:
     image: mongo:7
-    container_name: wechat_mongodb
+    container_name: echat_mongodb
     restart: unless-stopped
     ports:
       - "27017:27017"
@@ -12,7 +12,7 @@ services:
     build:
       context: .
       dockerfile: server/Dockerfile
-    container_name: wechat_server
+    container_name: echat_server
     restart: unless-stopped
     env_file:
       - .env
@@ -25,7 +25,7 @@ services:
     build:
       context: .
       dockerfile: client/Dockerfile
-    container_name: wechat_client
+    container_name: echat_client
     restart: unless-stopped
     env_file:
       - .env

@@ -56,6 +56,28 @@ export async function superAdminLogin(email, password) {
   return data;
 }
 
+export async function requestSuperAdminOtp(mobile, dob) {
+  const res = await fetch(`${API_URL}/api/super-admin/request-otp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mobile, dob })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to send OTP");
+  return data;
+}
+
+export async function verifySuperAdminOtp(mobile, otp) {
+  const res = await fetch(`${API_URL}/api/super-admin/verify-otp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mobile, otp })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "OTP verification failed");
+  return data;
+}
+
 export async function getTenantAnalytics(token) {
   const res = await fetch(`${API_URL}/api/super-admin/tenants`, {
     headers: { Authorization: `Bearer ${token}` }
@@ -76,6 +98,69 @@ export async function updateTenantSubscription(token, tenantId, payload) {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Failed to update subscription");
+  return data;
+}
+
+export async function blockTenant(token, tenantId) {
+  const res = await fetch(`${API_URL}/api/super-admin/tenants/${tenantId}/block`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to block tenant");
+  return data;
+}
+
+export async function unblockTenant(token, tenantId) {
+  const res = await fetch(`${API_URL}/api/super-admin/tenants/${tenantId}/unblock`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to unblock tenant");
+  return data;
+}
+
+export async function deleteTenant(token, tenantId) {
+  const res = await fetch(`${API_URL}/api/super-admin/tenants/${tenantId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to delete tenant");
+  return data;
+}
+
+export async function sendMessageToTenantAdmin(token, tenantId, payload) {
+  const res = await fetch(`${API_URL}/api/super-admin/tenants/${tenantId}/message`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to send message");
+  return data;
+}
+
+export async function getTenantAdminMessages(token) {
+  const res = await fetch(`${API_URL}/api/admin/messages`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to fetch messages");
+  return data;
+}
+
+export async function markTenantAdminMessageRead(token, messageId) {
+  const res = await fetch(`${API_URL}/api/admin/messages/${messageId}/read`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to mark read");
   return data;
 }
 
