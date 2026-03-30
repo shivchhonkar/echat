@@ -1,0 +1,38 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: wechat_mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: wechat_server
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "4000:4000"
+    depends_on:
+      - mongodb
+
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    container_name: wechat_client
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "5173:5173"
+    depends_on:
+      - server
+
+volumes:
+  mongodb_data:
