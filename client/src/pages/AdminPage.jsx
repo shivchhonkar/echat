@@ -23,6 +23,7 @@ function notifySound() {
 
 export default function AdminPage() {
   const [token, setToken] = useState(localStorage.getItem("admin_token") || "");
+  const [tenantSlug, setTenantSlug] = useState(localStorage.getItem("admin_tenant_slug") || "default");
   const [email, setEmail] = useState("admin@example.com");
   const [password, setPassword] = useState("admin123");
   const [sessions, setSessions] = useState([]);
@@ -68,14 +69,15 @@ export default function AdminPage() {
 
   async function handleLogin(e) {
     e.preventDefault();
-    const { token: newToken } = await adminLogin(email, password);
+    const { token: newToken } = await adminLogin(email, password, tenantSlug);
     localStorage.setItem("admin_token", newToken);
+    localStorage.setItem("admin_tenant_slug", tenantSlug);
     setToken(newToken);
   }
 
   async function openSession(session) {
     setSelectedSession(session);
-    const data = await getMessages(session._id);
+    const data = await getMessages(session._id, token);
     setMessages(data);
     socketRef.current?.emit(SOCKET_EVENTS.JOIN_SESSION, { sessionId: session._id });
     loadSessions();
@@ -109,9 +111,13 @@ export default function AdminPage() {
       <div className="admin-login">
         <form className="panel" onSubmit={handleLogin}>
           <h2>Admin Login</h2>
+          <p className="muted">For a specific business tenant</p>
+          <input value={tenantSlug} onChange={(e) => setTenantSlug(e.target.value)} placeholder="Tenant slug (e.g. default)" />
           <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
           <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="Password" />
           <button>Login</button>
+          <a className="text-link" href="/signup">Create new tenant</a>
+          <a className="text-link" href="/super-admin">Open platform admin</a>
         </form>
       </div>
     );
@@ -133,7 +139,7 @@ export default function AdminPage() {
             >
               <div>
                 <strong>{s.name}</strong>
-                <p>{s.email || "No email"} • {s.status}</p>
+                <p>{s.email || "No email"}{s.phone ? ` • ${s.phone}` : ""} • {s.status}</p>
                 <small>{s.pageUrl || "Unknown page"}</small>
               </div>
               {s.unreadCount > 0 ? <span className="badge">{s.unreadCount}</span> : null}

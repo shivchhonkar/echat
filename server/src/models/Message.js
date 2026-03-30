@@ -2,6 +2,12 @@ import mongoose from "mongoose";
 
 const MessageSchema = new mongoose.Schema(
   {
+    tenantId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Tenant",
+      required: true,
+      index: true
+    },
     sessionId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "UserSession",

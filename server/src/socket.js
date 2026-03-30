@@ -9,31 +9,43 @@ function roomFor(sessionId) {
 }
 
 export function registerSocket(io) {
-  io.adminSockets = new Set();
+  io.adminSocketsByTenant = new Map();
 
-  const broadcastAdminStatus = () => {
-    const online = io.adminSockets.size > 0;
-    io.emit(SOCKET_EVENTS.ADMIN_STATUS, { online });
+  const broadcastAdminStatus = (tenantId) => {
+    const online = (io.adminSocketsByTenant.get(String(tenantId))?.size ?? 0) > 0;
+    io.to(`tenant:${tenantId}`).emit(SOCKET_EVENTS.ADMIN_STATUS, { online });
   };
 
   io.on("connection", (socket) => {
     const role = socket.handshake.auth?.role || "user";
     const token = socket.handshake.auth?.token;
     const sessionId = socket.handshake.auth?.sessionId;
+    let adminTenantId = null;
 
     if (role === "admin") {
-      if (!verifySocketAdminToken(token)) {
+      const payload = verifySocketAdminToken(token);
+      if (!payload || !payload.tenantId) {
         socket.disconnect(true);
         return;
       }
-      io.adminSockets.add(socket.id);
-      broadcastAdminStatus();
+      adminTenantId = String(payload.tenantId);
+      const current = io.adminSocketsByTenant.get(adminTenantId) || new Set();
+      current.add(socket.id);
+      io.adminSocketsByTenant.set(adminTenantId, current);
+      socket.join(`tenant:${adminTenantId}`);
+      broadcastAdminStatus(adminTenantId);
     }
 
     if (role === "user" && sessionId && mongoose.Types.ObjectId.isValid(sessionId)) {
       socket.join(roomFor(sessionId));
-      UserSession.findByIdAndUpdate(sessionId, { socketId: socket.id, status: "online" }).catch(() => null);
-      io.to([...io.adminSockets]).emit(SOCKET_EVENTS.USER_CONNECTED, { sessionId });
+      UserSession.findByIdAndUpdate(sessionId, { socketId: socket.id, status: "online" })
+        .then((session) => {
+          if (!session?.tenantId) return;
+          socket.join(`tenant:${String(session.tenantId)}`);
+          io.to(`tenant:${String(session.tenantId)}`).emit(SOCKET_EVENTS.USER_CONNECTED, { sessionId });
+          broadcastAdminStatus(String(session.tenantId));
+        })
+        .catch(() => null);
     }
 
     socket.on(SOCKET_EVENTS.START_SESSION, async (payload) => {
@@ -45,7 +57,12 @@ export function registerSocket(io) {
         status: "online",
         pageUrl: payload.pageUrl ?? ""
       });
-      io.to([...io.adminSockets]).emit(SOCKET_EVENTS.USER_CONNECTED, { sessionId: sid });
+      const session = await UserSession.findById(sid).select("tenantId");
+      if (session?.tenantId) {
+        const tenantId = String(session.tenantId);
+        socket.join(`tenant:${tenantId}`);
+        io.to(`tenant:${tenantId}`).emit(SOCKET_EVENTS.USER_CONNECTED, { sessionId: sid });
+      }
     });
 
     socket.on(SOCKET_EVENTS.JOIN_SESSION, async ({ sessionId: sid }) => {
@@ -59,7 +76,11 @@ export function registerSocket(io) {
       if (!sid || !message?.trim() || !mongoose.Types.ObjectId.isValid(sid)) return;
 
       const sender = role === "admin" ? "admin" : "user";
+      const session = await UserSession.findById(sid).select("tenantId");
+      if (!session?.tenantId) return;
+      const tenantId = String(session.tenantId);
       const created = await Message.create({
+        tenantId,
         sessionId: sid,
         sender,
         message: message.trim(),
@@ -67,7 +88,7 @@ export function registerSocket(io) {
       });
 
       io.to(roomFor(sid)).emit(SOCKET_EVENTS.NEW_MESSAGE, created);
-      io.to([...io.adminSockets]).emit(SOCKET_EVENTS.UNREAD_COUNTS, { sessionId: sid });
+      io.to(`tenant:${tenantId}`).emit(SOCKET_EVENTS.UNREAD_COUNTS, { sessionId: sid });
     });
 
     socket.on(SOCKET_EVENTS.TYPING, ({ sessionId: sid, isTyping }) => {
@@ -81,8 +102,14 @@ export function registerSocket(io) {
 
     socket.on("disconnect", async () => {
       if (role === "admin") {
-        io.adminSockets.delete(socket.id);
-        broadcastAdminStatus();
+        if (!adminTenantId) return;
+        const set = io.adminSocketsByTenant.get(adminTenantId);
+        if (set) {
+          set.delete(socket.id);
+          if (set.size === 0) io.adminSocketsByTenant.delete(adminTenantId);
+          else io.adminSocketsByTenant.set(adminTenantId, set);
+        }
+        broadcastAdminStatus(adminTenantId);
       } else {
         const session = await UserSession.findOneAndUpdate(
           { socketId: socket.id },
@@ -90,7 +117,7 @@ export function registerSocket(io) {
           { new: true }
         );
         if (session) {
-          io.to([...io.adminSockets]).emit(SOCKET_EVENTS.USER_DISCONNECTED, { sessionId: String(session._id) });
+          io.to(`tenant:${String(session.tenantId)}`).emit(SOCKET_EVENTS.USER_DISCONNECTED, { sessionId: String(session._id) });
         }
       }
     });

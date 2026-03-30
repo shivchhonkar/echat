@@ -10,16 +10,17 @@ export async function startSession(payload) {
   return res.json();
 }
 
-export async function getAdminStatus() {
-  const res = await fetch(`${API_URL}/api/admin-status`);
+export async function getAdminStatus(tenantKey) {
+  const query = tenantKey ? `?tenantKey=${encodeURIComponent(tenantKey)}` : "";
+  const res = await fetch(`${API_URL}/api/admin-status${query}`);
   return res.json();
 }
 
-export async function adminLogin(email, password) {
+export async function adminLogin(email, password, tenantSlug) {
   const res = await fetch(`${API_URL}/api/admin/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password })
+    body: JSON.stringify({ email, password, tenantSlug })
   });
   if (!res.ok) throw new Error("Invalid login");
   return res.json();
@@ -33,10 +34,57 @@ export async function getSessions(token) {
   return res.json();
 }
 
-export async function getMessages(sessionId) {
-  const res = await fetch(`${API_URL}/api/messages/${sessionId}`);
-  if (!res.ok) throw new Error("Failed messages");
-  return res.json();
+export async function tenantSignup(payload) {
+  const res = await fetch(`${API_URL}/api/tenant/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to signup tenant");
+  return data;
+}
+
+export async function superAdminLogin(email, password) {
+  const res = await fetch(`${API_URL}/api/super-admin/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Invalid credentials");
+  return data;
+}
+
+export async function getTenantAnalytics(token) {
+  const res = await fetch(`${API_URL}/api/super-admin/tenants`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to fetch analytics");
+  return data;
+}
+
+export async function updateTenantSubscription(token, tenantId, payload) {
+  const res = await fetch(`${API_URL}/api/super-admin/tenants/${tenantId}/subscription`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to update subscription");
+  return data;
+}
+
+export async function getMessages(sessionId, token, tenantKey) {
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+  const query = !token && tenantKey ? `?tenantKey=${encodeURIComponent(tenantKey)}` : "";
+  const securedRes = await fetch(`${API_URL}/api/messages/${sessionId}${query}`, { headers });
+  if (!securedRes.ok) throw new Error("Failed messages");
+  return securedRes.json();
 }
 
 export { API_URL };

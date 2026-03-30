@@ -21,6 +21,7 @@ docker-compose.yml
 
 - Floating chat widget for users
 - User pre-chat form (name required, email optional)
+- Optional phone in pre-chat form
 - Real-time messaging (user ↔ admin)
 - Typing indicators
 - Message timestamps
@@ -33,11 +34,24 @@ docker-compose.yml
 - Auto-scroll messages
 - Socket reconnection (Socket.IO default + enabled)
 - Optional new-message beep notification in admin
+- Multi-tenant support (tenant-scoped data and admin isolation)
+- Tenant signup flow
+- Super-admin application for tenant subscription + usage analytics
+- Multi-tenant isolation (tenant key + tenant-scoped admin inbox)
 
 ## MongoDB Models
 
+- `Tenant`
+  - `_id`
+  - `name`
+  - `slug`
+  - `widgetKey`
+  - `adminEmail`
+  - `adminPassword`
+
 - `UserSession`
   - `_id`
+  - `tenantId`
   - `name`
   - `email`
   - `socketId`
@@ -47,6 +61,7 @@ docker-compose.yml
 
 - `Message`
   - `_id`
+  - `tenantId`
   - `sessionId`
   - `sender` (`user` | `admin`)
   - `message`
@@ -60,6 +75,15 @@ docker-compose.yml
 - `GET /api/messages/:sessionId`
 - `POST /api/admin/login`
 - `GET /api/admin-status`
+- `POST /api/tenant/signup`
+- `POST /api/super-admin/login`
+- `GET /api/super-admin/tenants`
+- `PATCH /api/super-admin/tenants/:tenantId/subscription`
+
+### Tenant-aware usage
+- Widget start session requires `tenantKey`
+- Admin login requires `tenantSlug`
+- Sessions/messages are isolated by tenant
 
 ## Socket Events
 
@@ -87,6 +111,8 @@ Server → Client:
 4. Open:
    - Widget: [http://localhost:5173](http://localhost:5173)
    - Admin: [http://localhost:5173/admin](http://localhost:5173/admin)
+   - Tenant signup: [http://localhost:5173/signup](http://localhost:5173/signup)
+   - Super admin: [http://localhost:5173/super-admin](http://localhost:5173/super-admin)
    - API health: [http://localhost:4000/health](http://localhost:4000/health)
 
 ## Local (without Docker)
@@ -116,7 +142,19 @@ From `.env`:
 - `ADMIN_EMAIL`
 - `ADMIN_PASSWORD`
 
+## Multi-Tenant Notes
+
+- Every tenant has:
+  - `slug` (used by tenant admin login)
+  - `widgetKey` (used by customer widget embedding)
+- Widget must send `tenantKey` on session start.
+- Admin panel login uses `tenantSlug + admin email/password`.
+- Super admin can view all tenant usage and update subscription plans.
+- `DEFAULT_TENANT_SLUG`
+- `DEFAULT_TENANT_WIDGET_KEY`
+
 ## Notes
 
 - To prefill user details (bonus), pass them to widget pre-chat form or extend `startSession()` call source page.
 - To embed widget in another site, mount the widget app and pass `pageUrl` from `window.location.href`.
+- For multi-business setup, create one tenant per business (`slug` + `widgetKey`) and embed with that tenant key.

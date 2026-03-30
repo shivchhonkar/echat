@@ -1,0 +1,11 @@
+<script>
+  window.WeChatSupportConfig = {
+    apiUrl: "https://your-api-domain.com",
+    socketUrl: "https://your-api-domain.com",
+    user: {
+      name: "Optional Prefilled Name",
+      email: "optional@email.com"
+    }
+  };
+</script>
+<script src="https://your-chat-domain.com/embed.js" async></script>

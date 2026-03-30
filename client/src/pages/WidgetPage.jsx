@@ -4,13 +4,17 @@ import { createUserSocket } from "../socket";
 import { getAdminStatus, getMessages, startSession } from "../api";
 import MessageList from "../components/MessageList";
 
-const STORAGE_KEY = "support_widget_session";
-
 export default function WidgetPage() {
+  const tenantKey = useMemo(
+    () => window.WeChatSupportConfig?.tenantKey || import.meta.env.VITE_TENANT_KEY || "default-key",
+    []
+  );
+  const STORAGE_KEY = `support_widget_session:${tenantKey}`;
   const [open, setOpen] = useState(true);
   const [sessionId, setSessionId] = useState(localStorage.getItem(STORAGE_KEY) || "");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [adminOnline, setAdminOnline] = useState(false);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
@@ -20,12 +24,12 @@ export default function WidgetPage() {
   const typingTimer = useRef(null);
 
   useEffect(() => {
-    getAdminStatus().then((r) => setAdminOnline(!!r.online)).catch(() => null);
-  }, []);
+    getAdminStatus(tenantKey).then((r) => setAdminOnline(!!r.online)).catch(() => null);
+  }, [tenantKey]);
 
   useEffect(() => {
     if (!sessionId) return;
-    getMessages(sessionId).then(setMessages).catch(() => setMessages([]));
+    getMessages(sessionId, null, tenantKey).then(setMessages).catch(() => setMessages([]));
 
     const socket = createUserSocket(sessionId);
     socketRef.current = socket;
@@ -42,14 +46,14 @@ export default function WidgetPage() {
 
     socket.emit(SOCKET_EVENTS.START_SESSION, { sessionId, pageUrl: window.location.href });
     return () => socket.close();
-  }, [sessionId]);
+  }, [sessionId, tenantKey]);
 
   const canStart = useMemo(() => name.trim().length > 1, [name]);
 
   async function handleStart(e) {
     e.preventDefault();
     if (!canStart) return;
-    const result = await startSession({ name, email, pageUrl: window.location.href });
+    const result = await startSession({ name, email, phone, pageUrl: window.location.href, tenantKey });
     const sid = String(result.sessionId);
     localStorage.setItem(STORAGE_KEY, sid);
     setSessionId(sid);
@@ -84,6 +88,7 @@ export default function WidgetPage() {
               <p className="muted">Start a conversation with support.</p>
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" required />
               <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (optional)" />
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone (optional)" />
               <button disabled={!canStart}>Start chat</button>
             </form>
           ) : (

@@ -8,7 +8,10 @@ import { Server } from "socket.io";
 import { connectDB } from "./config/db.js";
 import authRoutes from "./routes/auth.routes.js";
 import chatRoutes from "./routes/chat.routes.js";
+import tenantRoutes from "./routes/tenant.routes.js";
+import superAdminRoutes from "./routes/superAdmin.routes.js";
 import { registerSocket } from "./socket.js";
+import { ensureDefaultTenant } from "./bootstrapTenant.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,13 +44,16 @@ app.use(express.json());
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/admin", authRoutes);
+app.use("/api/tenant", tenantRoutes);
+app.use("/api/super-admin", superAdminRoutes);
 app.use("/api", chatRoutes);
 
 registerSocket(io);
 
 const port = Number(process.env.PORT || 4000);
 connectDB()
-  .then(() => {
+  .then(async () => {
+    await ensureDefaultTenant();
     server.listen(port, () => {
       console.log(`[SERVER] running on http://localhost:${port}`);
     });
