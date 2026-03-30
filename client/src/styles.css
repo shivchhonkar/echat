@@ -626,13 +626,27 @@ button, .text-link, select { cursor: pointer; }
 }
 
 .admin-wrap {
+  box-sizing: border-box;
   min-height: 100vh;
+  max-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   padding: 12px;
   background:
     radial-gradient(900px 320px at 20% -120px, rgba(37, 99, 235, 0.13), transparent 60%),
     linear-gradient(180deg, #f8fbff 0%, #f8fafc 60%, #f0fdf4 100%);
 }
+@supports (height: 100dvh) {
+  .admin-wrap {
+    min-height: 100dvh;
+    max-height: 100dvh;
+    height: 100dvh;
+  }
+}
 .admin-topbar {
+  flex-shrink: 0;
   border: 1px solid #bfdbfe;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.95);
@@ -884,9 +898,12 @@ button, .text-link, select { cursor: pointer; }
 }
 
 .admin-layout {
-  min-height: calc(100vh - 110px);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
   display: grid;
   grid-template-columns: 1fr;
+  grid-template-rows: minmax(240px, 40vh) 1fr;
   gap: 10px;
 }
 .sessions-panel {
@@ -895,7 +912,8 @@ button, .text-link, select { cursor: pointer; }
   background: #fff;
   display: grid;
   grid-template-rows: auto 1fr;
-  min-height: 280px;
+  min-height: 0;
+  overflow: hidden;
 }
 .sessions-head {
   padding: 12px;
@@ -904,7 +922,15 @@ button, .text-link, select { cursor: pointer; }
   align-items: center;
 }
 .sessions-head button { padding: 8px 10px; font-size: 12px; }
-.sessions-list { overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.sessions-list {
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overscroll-behavior: contain;
+}
 .session-item {
   width: 100%;
   text-align: left;
@@ -932,12 +958,28 @@ button, .text-link, select { cursor: pointer; }
   font-weight: 600;
 }
 
-.chat-panel { display: grid; grid-template-rows: auto 1fr auto; }
 .chat-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
   border: 1px solid #dbeafe;
   border-radius: 12px;
   background: #fff;
   overflow: hidden;
+}
+.chat-panel .admin-notice-list {
+  flex-shrink: 0;
+}
+.chat-panel .chat-head {
+  flex-shrink: 0;
+}
+.chat-panel .messages {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.chat-panel .chat-compose {
+  flex-shrink: 0;
 }
 .admin-notice-list {
   border-bottom: 1px solid #e2e8f0;
@@ -967,7 +1009,10 @@ button, .text-link, select { cursor: pointer; }
 }
 
 @media (max-width: 900px) {
-  .admin-layout { grid-template-columns: 1fr; grid-template-rows: minmax(240px, 40vh) 1fr; }
+  .admin-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(240px, 40vh) 1fr;
+  }
 }
 
 @media (min-width: 900px) {
@@ -986,16 +1031,20 @@ button, .text-link, select { cursor: pointer; }
     justify-content: space-between;
   }
   .admin-layout {
-    min-height: calc(100vh - 130px);
+    flex: 1;
+    min-height: 0;
     grid-template-columns: 320px 1fr;
+    grid-template-rows: 1fr;
     gap: 0;
   }
   .sessions-panel {
     border-right: 1px solid #e2e8f0;
     border-radius: 12px 0 0 12px;
+    min-height: 0;
   }
   .chat-panel {
     border-radius: 0 12px 12px 0;
+    min-height: 0;
   }
   .platform-wrap { padding: 20px; }
   .platform-toolbar { flex-direction: row; }
