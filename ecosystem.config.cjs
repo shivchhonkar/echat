@@ -1,8 +1,8 @@
 module.exports = {
   apps: [
     {
-      name: "echat",
-      cwd: "/var/www/eChat",
+      name: "echat-app",
+      cwd: "/root/projects/echat",   // ✅ FIXED PATH
       script: "npm",
       args: "start",
       interpreter: "none",
