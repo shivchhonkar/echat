@@ -8,5 +8,5 @@ COPY client ./client
 WORKDIR /app/client
 RUN npm install
 
-EXPOSE 5173
+EXPOSE 6001
 CMD ["npm", "run", "dev"]

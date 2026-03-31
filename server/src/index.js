@@ -50,7 +50,7 @@ app.use("/api", chatRoutes);
 
 registerSocket(io);
 
-const port = Number(process.env.PORT || 4000);
+const port = Number(process.env.PORT || 6100);
 connectDB()
   .then(async () => {
     await ensureDefaultTenant();

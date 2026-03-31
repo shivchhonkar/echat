@@ -113,7 +113,7 @@ Server → Client:
    - Admin: [http://localhost:5173/admin](http://localhost:5173/admin)
    - Tenant signup: [http://localhost:5173/signup](http://localhost:5173/signup)
    - Super admin: [http://localhost:5173/super-admin](http://localhost:5173/super-admin)
-   - API health: [http://localhost:4000/health](http://localhost:4000/health)
+   - API health: [http://localhost:6000/health](http://localhost:6000/health)
 
 ## Local (without Docker)
 
