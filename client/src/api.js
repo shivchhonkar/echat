@@ -1,4 +1,11 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:6100";
+/** Empty = same origin (Vite proxies /api → backend on :6100) */
+function resolveApiBase() {
+  const raw = import.meta.env.VITE_API_URL;
+  if (raw === undefined || raw === "") return "";
+  return String(raw).replace(/\/$/, "");
+}
+
+const API_URL = resolveApiBase();
 
 export async function startSession(payload) {
   const res = await fetch(`${API_URL}/api/start-session`, {

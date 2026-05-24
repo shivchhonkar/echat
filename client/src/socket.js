@@ -1,6 +1,13 @@
 import { io } from "socket.io-client";
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:6100";
+/** Undefined = same origin (Vite proxies /socket.io → backend) */
+function resolveSocketUrl() {
+  const raw = import.meta.env.VITE_SOCKET_URL;
+  if (raw === undefined || raw === "") return undefined;
+  return String(raw).replace(/\/$/, "");
+}
+
+const SOCKET_URL = resolveSocketUrl();
 
 export function createUserSocket(sessionId) {
   return io(SOCKET_URL, {
