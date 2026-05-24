@@ -152,7 +152,7 @@ export default function AdminPage() {
       <div className="admin-auth-wrap">
         <Header />
         <form className="panel admin-auth-panel" onSubmit={handleLogin}>
-          <h2>Admin Login</h2>
+          <h2 className="font-normal" style={{ fontSize: "24px", fontWeight: "500" }}>Admin Login</h2>
           <p className="muted">Access your tenant support inbox with slug-based login.</p>
           <input value={tenantSlug} onChange={(e) => setTenantSlug(e.target.value)} placeholder="Tenant slug (e.g. default)" />
           <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />

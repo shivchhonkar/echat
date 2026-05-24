@@ -3,6 +3,7 @@ import { createAdminToken } from "../middleware/auth.js";
 import { Tenant } from "../models/Tenant.js";
 import { TenantAdminMessage } from "../models/TenantAdminMessage.js";
 import { requireAdmin } from "../middleware/auth.js";
+import { ActivityLog } from "../models/ActivityLog.js";
 
 const router = Router();
 
@@ -14,14 +15,47 @@ router.post("/login", async (req, res) => {
 
   try {
     const tenant = await Tenant.findOne({ slug: String(tenantSlug).toLowerCase(), isActive: true });
-    if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+    if (!tenant) {
+      await ActivityLog.create({
+        actorRole: "tenant_admin",
+        actorEmail: String(email).toLowerCase(),
+        action: "tenant_admin_login",
+        status: "failure",
+        details: "Tenant not found or inactive",
+        metadata: { tenantSlug: String(tenantSlug).toLowerCase() },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent") || ""
+      });
+      return res.status(404).json({ error: "Tenant not found" });
+    }
     if (tenant.adminEmail !== String(email).toLowerCase() || tenant.adminPassword !== password) {
+      await ActivityLog.create({
+        tenantId: tenant._id,
+        actorRole: "tenant_admin",
+        actorEmail: String(email).toLowerCase(),
+        action: "tenant_admin_login",
+        status: "failure",
+        details: "Invalid credentials",
+        metadata: { tenantSlug: tenant.slug },
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent") || ""
+      });
       return res.status(401).json({ error: "Invalid credentials" });
     }
     const token = createAdminToken({
       tenantId: String(tenant._id),
       tenantSlug: tenant.slug,
       email: tenant.adminEmail
+    });
+    await ActivityLog.create({
+      tenantId: tenant._id,
+      actorRole: "tenant_admin",
+      actorEmail: tenant.adminEmail,
+      action: "tenant_admin_login",
+      status: "success",
+      metadata: { tenantSlug: tenant.slug },
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent") || ""
     });
     return res.json({
       token,

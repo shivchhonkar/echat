@@ -1083,27 +1083,54 @@ button, .text-link, select { cursor: pointer; }
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(6px);
   border-bottom: 1px solid #e2e8f0;
-  padding: 10px 12px;
+  padding: 12px 20px;
+  min-height: 68px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 16px;
 }
 .billint-brand {
-  font-weight: 600;
-  color: #0f172a;
-  text-decoration: none;
+  flex-shrink: 0;
 }
-.billint-brand a {
+.billint-brand-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
   text-decoration: none;
-  color: #0f172a;
-  font-weight: 600;
+  color: inherit;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
-.billint-brand a:hover {
-  color: var(--color-primary-600);  text-decoration: none;
-  transition: color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
-  text-decoration: none;
-  font-weight: 600;
+.billint-brand-link:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+.billint-brand-link:focus-visible {
+  outline: 2px solid #0ea5e9;
+  outline-offset: 4px;
+  border-radius: 10px;
+}
+.billint-logo {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 8px rgba(14, 165, 233, 0.28));
+}
+.billint-brand-text {
+  display: inline-flex;
+  align-items: baseline;
+  font-size: 1.375rem;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  text-transform: lowercase;
+}
+.billint-brand-billinte {
+  color: #38bdf8;
+}
+.billint-brand-chat {
+  color: #0369a1;
 }
 .billint-nav nav {
   display: none;

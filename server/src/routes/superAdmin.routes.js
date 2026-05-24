@@ -5,6 +5,7 @@ import { Tenant } from "../models/Tenant.js";
 import { UserSession } from "../models/UserSession.js";
 import { Message } from "../models/Message.js";
 import { TenantAdminMessage } from "../models/TenantAdminMessage.js";
+import { ActivityLog } from "../models/ActivityLog.js";
 
 const router = Router();
 const otpStore = new Map();
@@ -23,6 +24,30 @@ function normalizeDob(input = "") {
     if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
   }
   return value;
+}
+
+function getReqMeta(req) {
+  return {
+    ipAddress: req.ip,
+    userAgent: req.get("user-agent") || ""
+  };
+}
+
+async function logSuperAdminAction(req, action, status = "success", details = "", metadata = {}, tenantId = null) {
+  try {
+    await ActivityLog.create({
+      tenantId,
+      actorRole: "super_admin",
+      actorEmail: req.superAdmin?.email || "",
+      action,
+      status,
+      details,
+      metadata,
+      ...getReqMeta(req)
+    });
+  } catch {
+    // Intentionally ignore logging failures to keep API responsive.
+  }
 }
 
 router.post("/request-otp", async (req, res) => {
@@ -53,6 +78,15 @@ router.post("/verify-otp", async (req, res) => {
     return res.status(401).json({ error: "Invalid or expired OTP" });
   }
   otpStore.delete(mobile);
+  await ActivityLog.create({
+    actorRole: "super_admin",
+    actorEmail: `superadmin+${mobile}@echat.local`,
+    action: "super_admin_login_otp",
+    status: "success",
+    details: "Super admin logged in using OTP",
+    metadata: { mobile },
+    ...getReqMeta(req)
+  });
   return res.json({
     token: createSuperAdminToken({ email: `superadmin+${mobile}@echat.local` })
   });
@@ -66,9 +100,25 @@ router.post("/login", async (req, res) => {
     String(email).toLowerCase() !== String(process.env.SUPER_ADMIN_EMAIL || "superadmin@example.com").toLowerCase() ||
     password !== (process.env.SUPER_ADMIN_PASSWORD || "superadmin123")
   ) {
+    await ActivityLog.create({
+      actorRole: "super_admin",
+      actorEmail: String(email || "").toLowerCase(),
+      action: "super_admin_login_password",
+      status: "failure",
+      details: "Invalid credentials",
+      ...getReqMeta(req)
+    });
     return res.status(401).json({ error: "Invalid credentials" });
   }
 
+  await ActivityLog.create({
+    actorRole: "super_admin",
+    actorEmail: String(email).toLowerCase(),
+    action: "super_admin_login_password",
+    status: "success",
+    details: "Super admin logged in with password",
+    ...getReqMeta(req)
+  });
   return res.json({ token: createSuperAdminToken({ email: String(email).toLowerCase() }) });
 });
 
@@ -158,8 +208,17 @@ router.patch("/tenants/:tenantId/subscription", requireSuperAdmin, async (req, r
       { new: true }
     ).lean();
     if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+    await logSuperAdminAction(
+      req,
+      "tenant_subscription_updated",
+      "success",
+      "Updated tenant subscription settings",
+      { subscriptionPlan, subscriptionStatus, isActive },
+      tenant._id
+    );
     return res.json({ tenant });
   } catch {
+    await logSuperAdminAction(req, "tenant_subscription_updated", "failure", "Failed to update tenant subscription", { subscriptionPlan, subscriptionStatus, isActive }, tenantId);
     return res.status(500).json({ error: "Failed to update tenant subscription" });
   }
 });
@@ -174,8 +233,10 @@ router.patch("/tenants/:tenantId/block", requireSuperAdmin, async (req, res) => 
       { new: true }
     ).lean();
     if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+    await logSuperAdminAction(req, "tenant_blocked", "success", "Tenant blocked by super admin", {}, tenant._id);
     return res.json({ tenant });
   } catch {
+    await logSuperAdminAction(req, "tenant_blocked", "failure", "Failed to block tenant", {}, tenantId);
     return res.status(500).json({ error: "Failed to block tenant" });
   }
 });
@@ -190,8 +251,10 @@ router.patch("/tenants/:tenantId/unblock", requireSuperAdmin, async (req, res) =
       { new: true }
     ).lean();
     if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+    await logSuperAdminAction(req, "tenant_unblocked", "success", "Tenant unblocked by super admin", {}, tenant._id);
     return res.json({ tenant });
   } catch {
+    await logSuperAdminAction(req, "tenant_unblocked", "failure", "Failed to unblock tenant", {}, tenantId);
     return res.status(500).json({ error: "Failed to unblock tenant" });
   }
 });
@@ -207,8 +270,10 @@ router.delete("/tenants/:tenantId", requireSuperAdmin, async (req, res) => {
     ]);
     const deleted = await Tenant.findByIdAndDelete(tenantId).lean();
     if (!deleted) return res.status(404).json({ error: "Tenant not found" });
+    await logSuperAdminAction(req, "tenant_deleted", "success", "Tenant deleted by super admin", { deletedTenantSlug: deleted.slug }, deleted._id);
     return res.json({ success: true });
   } catch {
+    await logSuperAdminAction(req, "tenant_deleted", "failure", "Failed to delete tenant", {}, tenantId);
     return res.status(500).json({ error: "Failed to delete tenant" });
   }
 });
@@ -226,9 +291,96 @@ router.post("/tenants/:tenantId/message", requireSuperAdmin, async (req, res) =>
       subject: subject.trim(),
       message: message.trim()
     });
+    await logSuperAdminAction(req, "tenant_admin_message_sent", "success", "Message sent to tenant admin", { subject: subject.trim() }, tenant._id);
     return res.status(201).json({ message: created });
   } catch {
+    await logSuperAdminAction(req, "tenant_admin_message_sent", "failure", "Failed to send message to tenant admin", { subject: subject.trim() }, tenantId);
     return res.status(500).json({ error: "Failed to send message" });
+  }
+});
+
+/**
+ * Super admin assist flow:
+ * reset tenant admin credentials and optionally activate tenant,
+ * so tenant admin can sign in again.
+ */
+router.post("/tenants/:tenantId/help-signin", requireSuperAdmin, async (req, res) => {
+  const { tenantId } = req.params;
+  const { adminEmail, newPassword, activateTenant = true } = req.body ?? {};
+
+  if (!mongoose.Types.ObjectId.isValid(tenantId)) return res.status(400).json({ error: "Invalid tenantId" });
+  if (!adminEmail?.trim() || !newPassword?.trim()) {
+    return res.status(400).json({ error: "adminEmail and newPassword are required" });
+  }
+  if (String(newPassword).trim().length < 6) {
+    return res.status(400).json({ error: "newPassword must be at least 6 characters" });
+  }
+
+  try {
+    const tenant = await Tenant.findByIdAndUpdate(
+      tenantId,
+      {
+        adminEmail: String(adminEmail).toLowerCase().trim(),
+        adminPassword: String(newPassword).trim(),
+        ...(activateTenant ? { isActive: true } : {})
+      },
+      { new: true }
+    ).lean();
+    if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+
+    await logSuperAdminAction(
+      req,
+      "tenant_signin_helped",
+      "success",
+      "Tenant admin credentials reset by super admin",
+      { adminEmail: tenant.adminEmail, activateTenant: !!activateTenant },
+      tenant._id
+    );
+
+    return res.json({
+      success: true,
+      tenant: {
+        id: String(tenant._id),
+        slug: tenant.slug,
+        name: tenant.name,
+        adminEmail: tenant.adminEmail,
+        isActive: tenant.isActive
+      }
+    });
+  } catch {
+    await logSuperAdminAction(
+      req,
+      "tenant_signin_helped",
+      "failure",
+      "Failed to reset tenant admin credentials",
+      { adminEmail: String(adminEmail || "").toLowerCase(), activateTenant: !!activateTenant },
+      tenantId
+    );
+    return res.status(500).json({ error: "Failed to help tenant sign in" });
+  }
+});
+
+router.get("/activities", requireSuperAdmin, async (req, res) => {
+  try {
+    const { tenantId = "", action = "", status = "", limit = "200" } = req.query;
+    const safeLimit = Math.min(500, Math.max(1, Number(limit) || 200));
+    const query = {
+      ...(tenantId && mongoose.Types.ObjectId.isValid(String(tenantId))
+        ? { tenantId: new mongoose.Types.ObjectId(String(tenantId)) }
+        : {}),
+      ...(action ? { action: String(action) } : {}),
+      ...(status ? { status: String(status) } : {})
+    };
+
+    const logs = await ActivityLog.find(query)
+      .sort({ createdAt: -1 })
+      .limit(safeLimit)
+      .populate("tenantId", "name slug adminEmail")
+      .lean();
+
+    return res.json({ total: logs.length, activities: logs });
+  } catch {
+    return res.status(500).json({ error: "Failed to fetch activity logs" });
   }
 });
 
