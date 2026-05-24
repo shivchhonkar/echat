@@ -2,12 +2,9 @@ module.exports = {
   apps: [
     {
       name: "echat-web",
-
-      cwd: "/root/projects/echat/client",
-
-      script: "serve",
-      args: "-s dist -l 6001",
-
+      cwd: "./client",
+      script: "npm",
+      args: "start",
       env: {
         NODE_ENV: "production",
       },
