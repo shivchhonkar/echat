@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 6001,
-    strictPort: true
+    strictPort: true,
     allowedHosts: ['care.shribi.com']
   }
 });
