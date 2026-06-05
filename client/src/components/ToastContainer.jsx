@@ -1,8 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { subscribeToast } from "../utils/toast";
 
 export default function ToastContainer() {
   const [toasts, setToasts] = useState([]);
+  const isEmbedMode = useMemo(
+    () => new URLSearchParams(window.location.search).get("embed") === "1",
+    []
+  );
 
   useEffect(() => {
     const unsubscribe = subscribeToast((nextToast) => {
@@ -13,6 +17,8 @@ export default function ToastContainer() {
     });
     return unsubscribe;
   }, []);
+
+  if (isEmbedMode) return null;
 
   return (
     <div className="toast-stack" aria-live="polite" aria-atomic="true">
