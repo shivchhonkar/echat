@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => {
 
   const devProxy = {
     "/api": { target: backendTarget, changeOrigin: true },
+    "/uploads": { target: backendTarget, changeOrigin: true },
     "/health": { target: backendTarget, changeOrigin: true },
     "/socket.io": { target: backendTarget, ws: true, changeOrigin: true },
   };

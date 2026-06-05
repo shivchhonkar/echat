@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { tenantSignup } from "../api";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
@@ -64,6 +64,31 @@ export default function TenantSignupPage() {
       toast.error("Failed to copy install snippet");
     }
   }
+
+  function closeSuccessModal() {
+    setResult(null);
+    setCopied(false);
+  }
+
+  useEffect(() => {
+    if (!result) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function blockEscape(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    }
+
+    window.addEventListener("keydown", blockEscape, true);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", blockEscape, true);
+    };
+  }, [result]);
 
   return (
     <div className="signup-wrap">
@@ -136,16 +161,21 @@ export default function TenantSignupPage() {
       <Footer />
 
       {result ? (
-        <div className="modal-backdrop" onClick={() => setResult(null)}>
-          <div className="panel signup-success-modal" onClick={(e) => e.stopPropagation()}>
-            <strong>Tenant created successfully</strong>
+        <div className="modal-backdrop signup-success-backdrop" role="presentation">
+          <div
+            className="panel signup-success-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="signup-success-title"
+          >
+            <strong id="signup-success-title">Tenant created successfully</strong>
             <div>Slug: <code>{result.slug}</code></div>
             <div>Widget Key: <code>{result.widgetKey}</code></div>
             <p className="muted">Use slug on `/admin` and widget key in customer app config.</p>
             <p className="muted"><strong>Add this below code to your application to use we chat:</strong></p>
             <pre className="code-block">{buildInstallSnippet(result.widgetKey)}</pre>
             <div className="modal-actions">
-              <button type="button" onClick={() => setResult(null)}>
+              <button type="button" onClick={closeSuccessModal}>
                 Close
               </button>
               <button type="button" onClick={copyInstallSnippet}>

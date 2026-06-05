@@ -10,6 +10,7 @@ import authRoutes from "./routes/auth.routes.js";
 import chatRoutes from "./routes/chat.routes.js";
 import tenantRoutes from "./routes/tenant.routes.js";
 import superAdminRoutes from "./routes/superAdmin.routes.js";
+import uploadsRoutes from "./routes/uploads.routes.js";
 import { registerSocket } from "./socket.js";
 import { ensureDefaultTenant } from "./bootstrapTenant.js";
 
@@ -42,10 +43,14 @@ app.use(
 );
 app.use(express.json());
 
+const uploadsDir = path.join(serverDir, "uploads");
+app.use("/uploads", express.static(uploadsDir));
+
 app.get("/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/admin", authRoutes);
 app.use("/api/tenant", tenantRoutes);
 app.use("/api/super-admin", superAdminRoutes);
+app.use("/api", uploadsRoutes);
 app.use("/api", chatRoutes);
 
 registerSocket(io);

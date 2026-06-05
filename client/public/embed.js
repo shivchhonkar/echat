@@ -21,7 +21,7 @@
   iframe.style.zIndex = String(cfg.zIndex || 2147483000);
   iframe.style.background = "transparent";
   iframe.style.boxShadow = "0 20px 50px rgba(15,23,42,0.25)";
-  iframe.allow = "clipboard-write";
+  iframe.allow = "clipboard-write; display-capture; microphone";
 
   function setOpenState(isOpen) {
     if (isOpen) {

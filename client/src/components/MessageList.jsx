@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
+import { resolveAssetUrl } from "../api";
+import { getCallLogDetails, getCallLogTitle } from "../utils/callLogFormat";
 
 function formatTime(ts) {
   if (!ts) return "";
@@ -29,12 +31,94 @@ function dayKey(ts) {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
+function formatFileSize(bytes) {
+  const size = Number(bytes) || 0;
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function CheckIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
       <path d="m5 12 4 4L19 6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
+}
+
+function CallLogIcon({ status }) {
+  const missed = status === "missed" || status === "declined" || status === "cancelled";
+  return (
+    <span className={`chat-call-log-icon ${missed ? "missed" : "completed"}`} aria-hidden="true">
+      {missed ? (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path
+            d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path d="m15 9-6 6M9 9l6 6" strokeLinecap="round" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path
+            d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      )}
+    </span>
+  );
+}
+
+function MessageBody({ message }) {
+  const type = message.messageType || "text";
+
+  if (type === "call") {
+    const callLog = message.callLog || {};
+    return (
+      <div className="chat-call-log-body">
+        <CallLogIcon status={callLog.status} />
+        <div>
+          <strong>{getCallLogTitle(callLog)}</strong>
+          <small>{getCallLogDetails(callLog)}</small>
+        </div>
+      </div>
+    );
+  }
+  const attachment = message.attachment;
+  const hasText = !!message.message?.trim();
+
+  if (type === "image" && attachment?.url) {
+    const src = resolveAssetUrl(attachment.url);
+    return (
+      <div className="bubble-attachment">
+        <a href={src} target="_blank" rel="noopener noreferrer">
+          <img src={src} alt={attachment.filename || "Shared image"} className="bubble-image" />
+        </a>
+        {hasText ? <p>{message.message}</p> : null}
+      </div>
+    );
+  }
+
+  if (type === "file" && attachment?.url) {
+    const href = resolveAssetUrl(attachment.url);
+    return (
+      <div className="bubble-attachment">
+        <a href={href} target="_blank" rel="noopener noreferrer" className="bubble-file" download={attachment.filename}>
+          <span className="bubble-file-icon" aria-hidden="true">📎</span>
+          <span className="bubble-file-meta">
+            <strong>{attachment.filename || "File"}</strong>
+            <small>{formatFileSize(attachment.size)}</small>
+          </span>
+        </a>
+        {hasText ? <p>{message.message}</p> : null}
+      </div>
+    );
+  }
+
+  return <p>{message.message}</p>;
 }
 
 export default function MessageList({ messages, me, typingText, agentName = "Support", agentAvatar = "" }) {
@@ -64,7 +148,13 @@ export default function MessageList({ messages, me, typingText, agentName = "Sup
           label: formatDateLabel(message.timestamp),
         });
       }
-      groups.push({ type: "message", key: message._id || `${message.sender}-${message.timestamp}-${message.message}`, message });
+      groups.push({
+        type: "message",
+        key:
+          message._id ||
+          `${message.sender}-${message.timestamp}-${message.messageType}-${message.message}-${message.attachment?.url || ""}-${message.callLog?.endedAt || ""}`,
+        message,
+      });
     });
     return groups;
   }, [messages]);
@@ -87,6 +177,17 @@ export default function MessageList({ messages, me, typingText, agentName = "Sup
           }
 
           const m = item.message;
+          if (m.messageType === "call") {
+            return (
+              <div key={item.key} className="chat-call-log-row">
+                <div className={`chat-call-log-card status-${m.callLog?.status || "completed"}`}>
+                  <MessageBody message={m} />
+                  <span className="chat-call-log-time">{formatTime(m.timestamp)}</span>
+                </div>
+              </div>
+            );
+          }
+
           const mine = m.sender === me;
           return (
             <div key={item.key} className={`bubble-row ${mine ? "mine" : "theirs"}`}>
@@ -100,7 +201,7 @@ export default function MessageList({ messages, me, typingText, agentName = "Sup
                 </div>
               ) : null}
               <div className={`bubble ${mine ? "mine" : "theirs"}`}>
-                <p>{m.message}</p>
+                <MessageBody message={m} />
                 <div className="bubble-meta">
                   <span>{formatTime(m.timestamp)}</span>
                   {mine ? (

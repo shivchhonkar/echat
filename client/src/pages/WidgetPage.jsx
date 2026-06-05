@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SOCKET_EVENTS } from "@echat/shared/events";
 import { createUserSocket } from "../socket";
-import { getAdminStatus, getMessages, startSession } from "../api";
+import { getAdminStatus, getMessages, startSession, uploadAttachment } from "../api";
 import MessageList from "../components/MessageList";
+import { createScreenSharePublisher } from "../utils/screenShare";
+import { createVoiceCallManager } from "../utils/voiceCall";
+import VoiceCallBar, { VoiceCallStartButton } from "../components/VoiceCallBar";
 
 const FOOTER_ALERT_DURATION_MS = 3200;
 
@@ -68,7 +71,20 @@ export default function WidgetPage() {
   const typingTimer = useRef(null);
   const footerAlertTimer = useRef(null);
   const openRef = useRef(open);
+  const fileInputRef = useRef(null);
+  const screenShareRef = useRef(null);
+  const voiceCallRef = useRef(null);
+  const remoteVoiceAudioRef = useRef(null);
   const [footerAlert, setFooterAlert] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [screenSharing, setScreenSharing] = useState(false);
+  const [voiceCallActive, setVoiceCallActive] = useState(false);
+  const [selfVoiceMuted, setSelfVoiceMuted] = useState(false);
+  const [remoteVoiceMuted, setRemoteVoiceMuted] = useState(false);
+  const [mutedByAdmin, setMutedByAdmin] = useState(false);
+  const [outboundRinging, setOutboundRinging] = useState(false);
+  const outboundRingingRef = useRef(false);
+  outboundRingingRef.current = outboundRinging;
 
   const dismissFooterAlert = useCallback(() => {
     clearTimeout(footerAlertTimer.current);
@@ -113,10 +129,82 @@ export default function WidgetPage() {
     socket.on(SOCKET_EVENTS.TYPING, ({ sender, isTyping }) => {
       if (sender === "admin") setTyping(!!isTyping);
     });
+    socket.on(SOCKET_EVENTS.SCREEN_SHARE_ANSWER, (payload) => {
+      if (String(payload?.sessionId) !== String(sessionId)) return;
+      screenShareRef.current?.handleAnswer(payload);
+    });
+    socket.on(SOCKET_EVENTS.SCREEN_SHARE_ICE, (payload) => {
+      if (String(payload?.sessionId) !== String(sessionId)) return;
+      screenShareRef.current?.handleIce(payload);
+    });
+    socket.on(SOCKET_EVENTS.SCREEN_SHARE_REQUEST, (payload) => {
+      if (String(payload?.sessionId) !== String(sessionId)) return;
+      screenShareRef.current?.resendOffer?.();
+    });
+    socket.on(SOCKET_EVENTS.VOICE_CALL_OFFER, async (payload) => {
+      if (String(payload?.sessionId) !== String(sessionId)) return;
+      try {
+        if (!voiceCallRef.current) {
+          voiceCallRef.current = createVoiceCallManager(socket, sessionId, "user", {
+            onActiveChange: setVoiceCallActive,
+            onOutboundRingingChange: setOutboundRinging,
+            onSelfMuteChange: setSelfVoiceMuted,
+            onRemoteMuteChange: setRemoteVoiceMuted,
+            onAdminMutedChange: setMutedByAdmin,
+            getRemoteAudioEl: () => remoteVoiceAudioRef.current,
+          });
+        }
+        await voiceCallRef.current.handleOffer(payload);
+        showFooterAlert("Voice call connected", "success");
+      } catch (err) {
+        voiceCallRef.current?.endCall(false);
+        voiceCallRef.current = null;
+        setVoiceCallActive(false);
+        showFooterAlert(err.message || "Could not join voice call", "error");
+      }
+    });
+    socket.on(SOCKET_EVENTS.VOICE_CALL_ANSWER, async (payload) => {
+      if (String(payload?.sessionId) !== String(sessionId)) return;
+      await voiceCallRef.current?.handleAnswer(payload);
+      showFooterAlert("Voice call connected", "success");
+    });
+    socket.on(SOCKET_EVENTS.VOICE_CALL_ICE, (payload) => {
+      if (String(payload?.sessionId) !== String(sessionId)) return;
+      voiceCallRef.current?.handleIce(payload);
+    });
+    socket.on(SOCKET_EVENTS.VOICE_CALL_END, (payload) => {
+      if (String(payload?.sessionId) !== String(sessionId)) return;
+      voiceCallRef.current?.endCall(false);
+      voiceCallRef.current = null;
+      setVoiceCallActive(false);
+      setOutboundRinging(false);
+      setSelfVoiceMuted(false);
+      setRemoteVoiceMuted(false);
+      setMutedByAdmin(false);
+      showFooterAlert(outboundRingingRef.current ? "Call not answered" : "Voice call ended", "success");
+    });
+    socket.on(SOCKET_EVENTS.VOICE_MUTE_STATE, (payload) => {
+      if (String(payload?.sessionId) !== String(sessionId)) return;
+      voiceCallRef.current?.handleRemoteMuteState(payload);
+    });
+    socket.on(SOCKET_EVENTS.VOICE_REMOTE_MUTE, (payload) => {
+      if (String(payload?.sessionId) !== String(sessionId)) return;
+      voiceCallRef.current?.handleAdminRemoteMute(payload);
+    });
+    socket.on(SOCKET_EVENTS.VOICE_CALL_REQUEST, (payload) => {
+      if (String(payload?.sessionId) !== String(sessionId)) return;
+      voiceCallRef.current?.resendOffer?.();
+    });
 
     socket.emit(SOCKET_EVENTS.START_SESSION, { sessionId, pageUrl: window.location.href });
-    return () => socket.close();
-  }, [sessionId, tenantKey]);
+    return () => {
+      screenShareRef.current?.stop();
+      screenShareRef.current = null;
+      voiceCallRef.current?.endCall(false);
+      voiceCallRef.current = null;
+      socket.close();
+    };
+  }, [sessionId, tenantKey, showFooterAlert]);
 
   const canStart = useMemo(() => name.trim().length > 1, [name]);
 
@@ -176,6 +264,86 @@ export default function WidgetPage() {
     typingTimer.current = setTimeout(() => {
       socketRef.current?.emit(SOCKET_EVENTS.TYPING, { sessionId, isTyping: false });
     }, 800);
+  }
+
+  async function handleFileSelect(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !sessionId || !socketRef.current) return;
+    setUploading(true);
+    try {
+      const uploaded = await uploadAttachment(file, sessionId, { tenantKey });
+      socketRef.current.emit(SOCKET_EVENTS.SEND_MESSAGE, {
+        sessionId,
+        message: text.trim() || "",
+        messageType: uploaded.messageType,
+        attachment: uploaded
+      });
+      setText("");
+      showFooterAlert("File sent", "success");
+    } catch (err) {
+      showFooterAlert(err.message || "Failed to upload file", "error");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function endVoiceCall() {
+    const reason = outboundRingingRef.current ? "cancelled" : "hangup";
+    voiceCallRef.current?.endCall(true, reason);
+    voiceCallRef.current = null;
+    setVoiceCallActive(false);
+    setOutboundRinging(false);
+    setSelfVoiceMuted(false);
+    setRemoteVoiceMuted(false);
+    setMutedByAdmin(false);
+  }
+
+  async function startVoiceCall() {
+    if (!sessionId || !socketRef.current) return;
+    if (voiceCallActive || outboundRinging) return;
+    try {
+      endVoiceCall();
+      voiceCallRef.current = createVoiceCallManager(socketRef.current, sessionId, "user", {
+        onActiveChange: setVoiceCallActive,
+        onOutboundRingingChange: setOutboundRinging,
+        onSelfMuteChange: setSelfVoiceMuted,
+        onRemoteMuteChange: setRemoteVoiceMuted,
+        onAdminMutedChange: setMutedByAdmin,
+        getRemoteAudioEl: () => remoteVoiceAudioRef.current,
+      });
+      await voiceCallRef.current.startCall();
+      showFooterAlert("Calling support...", "success");
+    } catch (err) {
+      endVoiceCall();
+      showFooterAlert(err.message || "Could not start voice call", "error");
+    }
+  }
+
+  function toggleSelfVoiceMute() {
+    if (mutedByAdmin) {
+      showFooterAlert("You were muted by support", "error");
+      return;
+    }
+    voiceCallRef.current?.toggleSelfMute();
+  }
+
+  async function toggleScreenShare() {
+    if (!sessionId || !socketRef.current) return;
+    if (screenSharing) {
+      screenShareRef.current?.stop();
+      return;
+    }
+    try {
+      if (!screenShareRef.current) {
+        screenShareRef.current = createScreenSharePublisher(socketRef.current, sessionId, setScreenSharing);
+      }
+      await screenShareRef.current.start();
+      showFooterAlert("Screen sharing started", "success");
+    } catch (err) {
+      setScreenSharing(false);
+      showFooterAlert(err.message || "Could not share screen", "error");
+    }
   }
 
   return (
@@ -343,15 +511,31 @@ export default function WidgetPage() {
                 </div>
 
                 <div className="chat-session-actions">
-                  {/* <button type="button" className="chat-session-icon-btn" aria-label="Rate support">
-                    {/* <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                      <path
-                        d="M7 10v12M7 10l3-7a2 2 0 0 1 2-2h1a2 2 0 0 1 2 2v5h5a2 2 0 0 1 2 2l-1 7H7z"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg> 
-                  </button> */}
+                  {!voiceCallActive && !outboundRinging ? (
+                    <VoiceCallStartButton
+                      onClick={startVoiceCall}
+                      disabled={!connected}
+                      title="Start voice call"
+                      className="chat-session-icon-btn"
+                    />
+                  ) : null}
+                  <button
+                    type="button"
+                    className={`chat-session-icon-btn ${screenSharing ? "active" : ""}`}
+                    aria-label={screenSharing ? "Stop screen sharing" : "Share screen"}
+                    onClick={toggleScreenShare}
+                    title={screenSharing ? "Stop sharing" : "Share your screen"}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <rect x="2" y="3" width="20" height="14" rx="2" />
+                      <path d="M8 21h8M12 17v4" strokeLinecap="round" />
+                      {screenSharing ? (
+                        <path d="m9 9 6 6M15 9l-6 6" strokeLinecap="round" />
+                      ) : (
+                        <path d="M12 8v5M9.5 10.5h5" strokeLinecap="round" />
+                      )}
+                    </svg>
+                  </button>
                   <button type="button" className="chat-session-icon-btn" aria-label="More options">
                     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                       <circle cx="12" cy="5" r="1.6" />
@@ -367,6 +551,23 @@ export default function WidgetPage() {
                   Reconnecting...
                 </div>
               ) : null}
+              {screenSharing ? (
+                <div className="chat-screen-share-banner" role="status">
+                  You are sharing your screen with support
+                </div>
+              ) : null}
+              <audio ref={remoteVoiceAudioRef} autoPlay playsInline className="voice-call-audio-sink" />
+              <VoiceCallBar
+                inCall={voiceCallActive}
+                ringing={outboundRinging}
+                ringingLabel={`Calling ${supportConfig.agentName || "support"}...`}
+                selfMuted={selfVoiceMuted}
+                remoteMuted={remoteVoiceMuted}
+                mutedByAdmin={mutedByAdmin}
+                remoteLabel={supportConfig.agentName || "Support"}
+                onToggleSelfMute={toggleSelfVoiceMute}
+                onEndCall={endVoiceCall}
+              />
 
               <MessageList
                 messages={messages}
@@ -377,14 +578,28 @@ export default function WidgetPage() {
               />
 
               <form onSubmit={sendMessage} className="chat-compose">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="chat-file-input"
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip"
+                  onChange={handleFileSelect}
+                />
                 <div className="chat-compose-field">
                   <input
                     value={text}
                     onChange={(e) => onType(e.target.value)}
-                    placeholder="Type your message..."
+                    placeholder={uploading ? "Uploading..." : "Type your message..."}
                     aria-label="Message"
+                    disabled={uploading}
                   />
-                  <button type="button" className="chat-compose-attach" aria-label="Attach file">
+                  <button
+                    type="button"
+                    className="chat-compose-attach"
+                    aria-label="Attach file"
+                    disabled={uploading}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                       <path
                         d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
@@ -398,7 +613,7 @@ export default function WidgetPage() {
                   type="submit"
                   className="chat-compose-send"
                   aria-label="Send message"
-                  disabled={!text.trim()}
+                  disabled={!text.trim() || uploading}
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                     <path d="m22 2-7 20-4-9-9-4Z" strokeLinecap="round" strokeLinejoin="round" />

@@ -179,4 +179,23 @@ export async function getMessages(sessionId, token, tenantKey) {
   return securedRes.json();
 }
 
+export async function uploadAttachment(file, sessionId, { token, tenantKey } = {}) {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("sessionId", sessionId);
+  if (tenantKey) form.append("tenantKey", tenantKey);
+
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+  const res = await fetch(`${API_URL}/api/uploads`, { method: "POST", headers, body: form });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Upload failed");
+  return data;
+}
+
+export function resolveAssetUrl(url) {
+  if (!url) return "";
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${API_URL}${url.startsWith("/") ? url : `/${url}`}`;
+}
+
 export { API_URL };
