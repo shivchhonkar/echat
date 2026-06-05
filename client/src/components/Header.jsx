@@ -2,7 +2,7 @@ export default function Header() {
   return (
     <header className="billint-nav">
       <div className="billint-brand">
-        <a href="/" className="billint-brand-link" aria-label="BillinteChat home">
+        <a href="/" className="billint-brand-link" aria-label="Shribi care home">
           <img
             src="https://shribi.com/assets/shribi-logo.png"
             alt=""
@@ -17,15 +17,20 @@ export default function Header() {
           </span>
         </a>
       </div>
-      <nav>
+
+      <nav className="billint-nav-links" aria-label="Main navigation">
         <a href="/">Home</a>
-        <a href="/signup">Signup echat for free</a>
         <a href="/admin">Admin Panel</a>
-        <a href="/super-admin">Platform Admin</a>
       </nav>
-      <a className="billint-btn-primary" href="/signup">
-        Signup for free
-      </a>
+
+      <div className="billint-nav-actions">
+        <a className="billint-btn-ghost" href="/admin">
+          Login
+        </a>
+        <a className="billint-btn-primary" href="/signup">
+          Signup for free
+        </a>
+      </div>
     </header>
   );
 }

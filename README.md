@@ -159,12 +159,16 @@ From `.env`:
 ```html
 <script>
   window.WeChatSupportConfig = {
-    tenantSlug: "billint",
-    widgetKey: "billint-z1an30"
+    widgetKey: "billint-z1an30",
+    widgetBaseUrl: "https://care.shribi.com",
+    title: "Support Chat",
+    tagline: "We're here to help!"
   };
 </script>
-<script src="http://localhost:5173/embed.js" async></script>
+<script src="https://care.shribi.com/embed.js" async></script>
 ```
+
+For local development, set `widgetBaseUrl` to `http://localhost:6001` and load `http://localhost:6001/embed.js`.
 
 ## Notes
 

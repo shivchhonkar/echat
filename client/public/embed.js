@@ -5,7 +5,7 @@
 
   var cfg = window.EchatConfig || window.WeChatSupportConfig || {};
   var tenantKey = cfg.widgetKey || cfg.tenantKey || "default-key";
-  var baseUrl = cfg.widgetBaseUrl || "http://localhost:5173";
+  var baseUrl = (cfg.widgetBaseUrl || "https://care.shribi.com").replace(/\/$/, "");
   var iframeUrl = cfg.iframeUrl || (baseUrl + "/?embed=1&tenantKey=" + encodeURIComponent(tenantKey));
 
   var iframe = document.createElement("iframe");

@@ -4,6 +4,23 @@ import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { toast } from "../utils/toast";
 
+const WIDGET_PROD_URL = "https://care.shribi.com";
+const WIDGET_DEV_URL = "http://localhost:6001";
+
+function buildInstallSnippet(widgetKey) {
+  return `<script>
+  window.WeChatSupportConfig = {
+    widgetKey: "${widgetKey}",
+    widgetBaseUrl: "${WIDGET_PROD_URL}",
+    title: "Support Chat",
+    tagline: "We're here to help!"
+  };
+</script>
+<script src="${WIDGET_PROD_URL}/embed.js" async></script>
+
+<!-- Local dev: widgetBaseUrl "${WIDGET_DEV_URL}" and script src "${WIDGET_DEV_URL}/embed.js" -->`;
+}
+
 export default function TenantSignupPage() {
   const [businessName, setBusinessName] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
@@ -37,17 +54,7 @@ export default function TenantSignupPage() {
 
   async function copyInstallSnippet() {
     if (!result) return;
-    const snippet = `<script>
-  (function () {
-    var isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    if (!isLocal) return;
-    window.WeChatSupportConfig = Object.assign({}, window.WeChatSupportConfig || {}, {
-      widgetKey: '${result.widgetKey}',
-      widgetBaseUrl: 'http://localhost:5173'
-    });
-  })();
-</script>
-<script src="http://localhost:5173/embed.js" async></script>`;
+    const snippet = buildInstallSnippet(result.widgetKey);
     try {
       await navigator.clipboard.writeText(snippet);
       setCopied(true);
@@ -136,19 +143,7 @@ export default function TenantSignupPage() {
             <div>Widget Key: <code>{result.widgetKey}</code></div>
             <p className="muted">Use slug on `/admin` and widget key in customer app config.</p>
             <p className="muted"><strong>Add this below code to your application to use we chat:</strong></p>
-            <pre className="code-block">{`<Script id="echat-widget-config" strategy="afterInteractive">
-  {\\\`
-    (function () {
-      var isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      if (!isLocal) return;
-      window.WeChatSupportConfig = Object.assign({}, window.WeChatSupportConfig || {}, {
-        widgetKey: '${result.widgetKey}',
-        widgetBaseUrl: 'http://localhost:5173'
-      });
-    })();
-  \\\`}
-</Script>
-<Script src="http://localhost:5173/embed.js" strategy="afterInteractive" />`}</pre>
+            <pre className="code-block">{buildInstallSnippet(result.widgetKey)}</pre>
             <div className="modal-actions">
               <button type="button" onClick={() => setResult(null)}>
                 Close
