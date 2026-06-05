@@ -90,6 +90,7 @@ export default function AdminPage() {
   const [customerMutedByAdmin, setCustomerMutedByAdmin] = useState(false);
   const [incomingVoiceCall, setIncomingVoiceCall] = useState(null);
   const incomingVoiceCallRef = useRef(null);
+  const pendingVoiceIceRef = useRef([]);
   const voiceCallActiveRef = useRef(false);
   const sessionsRef = useRef([]);
 
@@ -115,6 +116,7 @@ export default function AdminPage() {
 
   function dismissIncomingCall() {
     stopIncomingCallRingtone();
+    pendingVoiceIceRef.current = [];
     setIncomingVoiceCall(null);
   }
 
@@ -164,7 +166,11 @@ export default function AdminPage() {
 
       voiceCallRef.current = null;
       const manager = ensureVoiceCallManager(call.sessionId);
+      const bufferedIce = [...pendingVoiceIceRef.current];
+      pendingVoiceIceRef.current = [];
       await manager?.handleOffer({ sessionId: call.sessionId, offer: call.offer });
+      await manager?.flushExternalIce?.(bufferedIce);
+      await manager?.attachRemoteAudio?.();
       toast.success("Voice call connected");
     } catch (err) {
       endVoiceCall();
@@ -279,8 +285,17 @@ export default function AdminPage() {
       voiceCallRef.current?.handleAnswer(payload);
     });
     socket.on(SOCKET_EVENTS.VOICE_CALL_ICE, (payload) => {
+      const sid = payload?.sessionId;
+      if (!sid) return;
+      if (
+        incomingVoiceCallRef.current &&
+        String(incomingVoiceCallRef.current.sessionId) === String(sid)
+      ) {
+        pendingVoiceIceRef.current.push(payload);
+        return;
+      }
       const activeSessionId = sessionIdRef.current;
-      if (!activeSessionId || String(payload?.sessionId) !== String(activeSessionId)) return;
+      if (!activeSessionId || String(sid) !== String(activeSessionId)) return;
       voiceCallRef.current?.handleIce(payload);
     });
     socket.on(SOCKET_EVENTS.VOICE_CALL_END, (payload) => {

@@ -143,6 +143,7 @@ export default function WidgetPage() {
     });
     socket.on(SOCKET_EVENTS.VOICE_CALL_OFFER, async (payload) => {
       if (String(payload?.sessionId) !== String(sessionId)) return;
+      if (payload?.callerRole !== "admin") return;
       try {
         if (!voiceCallRef.current) {
           voiceCallRef.current = createVoiceCallManager(socket, sessionId, "user", {
@@ -165,7 +166,9 @@ export default function WidgetPage() {
     });
     socket.on(SOCKET_EVENTS.VOICE_CALL_ANSWER, async (payload) => {
       if (String(payload?.sessionId) !== String(sessionId)) return;
-      await voiceCallRef.current?.handleAnswer(payload);
+      if (!voiceCallRef.current) return;
+      await voiceCallRef.current.handleAnswer(payload);
+      await voiceCallRef.current.attachRemoteAudio?.();
       showFooterAlert("Voice call connected", "success");
     });
     socket.on(SOCKET_EVENTS.VOICE_CALL_ICE, (payload) => {

@@ -61,6 +61,13 @@ export function createVoiceCallManager(socket, sessionId, localRole, options = {
     return localStream;
   }
 
+  async function attachRemoteAudio() {
+    const audioEl = typeof getRemoteAudioEl === "function" ? getRemoteAudioEl() : null;
+    if (audioEl && remoteStream) {
+      await attachAudioStream(audioEl, remoteStream);
+    }
+  }
+
   function setupPeerConnection() {
     pc?.close();
     pendingCandidates.length = 0;
@@ -74,10 +81,7 @@ export function createVoiceCallManager(socket, sessionId, localRole, options = {
 
     pc.ontrack = (event) => {
       remoteStream = event.streams[0] || null;
-      const audioEl = typeof getRemoteAudioEl === "function" ? getRemoteAudioEl() : null;
-      if (audioEl && remoteStream) {
-        attachAudioStream(audioEl, remoteStream);
-      }
+      attachRemoteAudio();
     };
 
     pc.onconnectionstatechange = () => {
@@ -134,11 +138,7 @@ export function createVoiceCallManager(socket, sessionId, localRole, options = {
     socket.emit(SOCKET_EVENTS.VOICE_CALL_ANSWER, { sessionId, answer: pc.localDescription });
     notifyActive(true);
     emitMuteState();
-
-    const audioEl = typeof getRemoteAudioEl === "function" ? getRemoteAudioEl() : null;
-    if (audioEl && remoteStream) {
-      await attachAudioStream(audioEl, remoteStream);
-    }
+    await attachRemoteAudio();
   }
 
   async function handleAnswer({ answer }) {
@@ -148,9 +148,15 @@ export function createVoiceCallManager(socket, sessionId, localRole, options = {
     onOutboundRingingChange?.(false);
     notifyActive(true);
     emitMuteState();
-    const audioEl = typeof getRemoteAudioEl === "function" ? getRemoteAudioEl() : null;
-    if (audioEl && remoteStream) {
-      await attachAudioStream(audioEl, remoteStream);
+    await attachRemoteAudio();
+    requestAnimationFrame(() => {
+      attachRemoteAudio();
+    });
+  }
+
+  async function flushExternalIce(candidates = []) {
+    for (const payload of candidates) {
+      await handleIce(payload);
     }
   }
 
@@ -246,6 +252,8 @@ export function createVoiceCallManager(socket, sessionId, localRole, options = {
     handleOffer,
     handleAnswer,
     handleIce,
+    flushExternalIce,
+    attachRemoteAudio,
     resendOffer,
     toggleSelfMute,
     setSelfMuted,
