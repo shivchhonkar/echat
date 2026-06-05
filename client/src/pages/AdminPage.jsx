@@ -5,11 +5,22 @@ import { createAdminSocket } from "../socket";
 import MessageList from "../components/MessageList";
 import { createScreenShareViewer } from "../utils/screenShare";
 import { createVoiceCallManager } from "../utils/voiceCall";
-import VoiceCallBar, { VoiceCallStartButton } from "../components/VoiceCallBar";
+import VoiceCallBar from "../components/VoiceCallBar";
 import IncomingCallPanel from "../components/IncomingCallPanel";
 import { startIncomingCallRingtone, stopIncomingCallRingtone } from "../utils/callRingtone";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import AdminSidebar from "../components/admin/AdminSidebar";
+import AdminTopBar from "../components/admin/AdminTopBar";
+import {
+  countOnlineSessions,
+  filterSessions,
+  formatSessionTime,
+  getAvatarHue,
+  getInitials,
+  getPagePath,
+  getWebsiteFromUrl,
+} from "../utils/adminSessionFormat";
 import { toast } from "../utils/toast";
 
 function getFullscreenElement() {
@@ -72,6 +83,9 @@ export default function AdminPage() {
   const [typing, setTyping] = useState(false);
   const [adminNotices, setAdminNotices] = useState([]);
   const [confirmSignout, setConfirmSignout] = useState(false);
+  const [sessionSearch, setSessionSearch] = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showUserDetails, setShowUserDetails] = useState(false);
   const socketRef = useRef(null);
   const typingTimer = useRef(null);
   const fileInputRef = useRef(null);
@@ -502,9 +516,14 @@ export default function AdminPage() {
     setScreenViewing(false);
   }
 
-  const activeLabel = useMemo(
-    () => (selectedSession ? `${selectedSession.name}${selectedSession.email ? ` (${selectedSession.email})` : ""}` : "Select a chat"),
-    [selectedSession]
+  const filteredSessions = useMemo(
+    () => filterSessions(sessions, sessionSearch),
+    [sessions, sessionSearch]
+  );
+  const onlineCount = useMemo(() => countOnlineSessions(sessions), [sessions]);
+  const unreadNoticeCount = useMemo(
+    () => adminNotices.filter((n) => !n.read).length,
+    [adminNotices]
   );
 
   useEffect(() => {
@@ -534,148 +553,327 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="admin-wrap">
-      <div className="admin-topbar">
-        <div>
-          <strong>Tenant Admin Console</strong>
-          <p className="muted">Workspace: {tenantSlug}</p>
-        </div>
-        <div className="actions">
-          <button onClick={loadSessions}>Refresh</button>
-          <button
-            className="danger"
-            onClick={() => setConfirmSignout(true)}
-          >
-            Sign out
-          </button>
-        </div>
-      </div>
-      <div className="admin-layout">
-      <aside className="sessions-panel">
-        <div className="sessions-head">
-          <h3>Active users</h3>
-          <button onClick={loadSessions}>Refresh</button>
-        </div>
-        <div className="sessions-list">
-          {sessions.map((s) => (
-            <button
-              key={s._id}
-              onClick={() => openSession(s)}
-              className={`session-item ${sessionId === s._id ? "active" : ""}`}
-            >
-              <div>
-                <strong>{s.name}</strong>
-                <p>{s.email || "No email"}{s.phone ? ` • ${s.phone}` : ""} • {s.status}</p>
-                <small>{s.pageUrl || "Unknown page"}</small>
-              </div>
-              {s.unreadCount > 0 ? <span className="badge">{s.unreadCount}</span> : null}
-            </button>
-          ))}
-        </div>
-      </aside>
+    <div className="admin-console">
+      <AdminSidebar activeCount={onlineCount} collapsed={sidebarCollapsed} />
+      <div className="admin-console-main">
+        <AdminTopBar
+          noticeCount={unreadNoticeCount || adminNotices.length}
+          onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
+          onSignOut={() => setConfirmSignout(true)}
+        />
 
-      <main className="chat-panel">
-        {adminNotices.length > 0 ? (
-          <div className="admin-notice-list">
-            {adminNotices.slice(0, 3).map((n) => (
-              <div key={n._id} className={`admin-notice ${n.read ? "read" : ""}`}>
-                <div>
-                  <strong>{n.subject}</strong>
-                  <p>{n.message}</p>
+        <div className="admin-workspace-head">
+          <div className="admin-workspace-title">
+            <span className="admin-workspace-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M7 8h10M7 12h6" strokeLinecap="round" />
+              </svg>
+            </span>
+            <div>
+              <h2 className="admin-workspace-heading">Tenant Admin Console</h2>
+              <p>Workspace: {tenantSlug}</p>
+            </div>
+          </div>
+          <div className="admin-workspace-actions">
+            <button type="button" className="admin-btn-outline" onClick={loadSessions}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M21 12a9 9 0 1 1-2.64-6.36" strokeLinecap="round" />
+                <path d="M21 3v6h-6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Refresh
+            </button>
+            <button type="button" className="admin-btn-outline danger" onClick={() => setConfirmSignout(true)}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Sign out
+            </button>
+          </div>
+        </div>
+
+        <div className="admin-console-body">
+          <aside className="admin-users-panel">
+            <div className="admin-users-head">
+              <h3>Active users</h3>
+              <button type="button" className="admin-icon-btn primary" onClick={loadSessions} aria-label="Refresh users">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 12a9 9 0 1 1-2.64-6.36" strokeLinecap="round" />
+                  <path d="M21 3v6h-6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
+            <div className="admin-users-search-row">
+              <div className="admin-users-search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.3-4.3" strokeLinecap="round" />
+                </svg>
+                <input
+                  value={sessionSearch}
+                  onChange={(e) => setSessionSearch(e.target.value)}
+                  placeholder="Search by name, email or phone..."
+                />
+              </div>
+              <span className="admin-online-count">{onlineCount} Online</span>
+            </div>
+            <div className="admin-users-list">
+              {filteredSessions.length === 0 ? (
+                <p className="admin-users-empty">No active users match your search.</p>
+              ) : (
+                filteredSessions.map((s) => {
+                  const hue = getAvatarHue(s.name);
+                  const isOnline = s.status === "online";
+                  return (
+                    <button
+                      key={s._id}
+                      type="button"
+                      onClick={() => openSession(s)}
+                      className={`admin-user-card ${sessionId === s._id ? "active" : ""}`}
+                    >
+                      <div className="admin-user-card-top">
+                        <span
+                          className="admin-user-avatar"
+                          style={{ background: `hsl(${hue} 72% 46%)` }}
+                          aria-hidden="true"
+                        >
+                          {getInitials(s.name)}
+                        </span>
+                        <div className="admin-user-card-main">
+                          <div className="admin-user-card-name">
+                            <span className="admin-user-name">{s.name}</span>
+                            <span className={`admin-user-status ${isOnline ? "online" : ""}`}>
+                              <span className="admin-user-status-dot" aria-hidden="true" />
+                              {isOnline ? "Online" : s.status || "Offline"}
+                            </span>
+                          </div>
+                          <p className="admin-user-email">{s.email || "No email"}</p>
+                          {s.phone ? <p className="admin-user-phone">{s.phone}</p> : null}
+                          <p className="admin-user-site">{getWebsiteFromUrl(s.pageUrl)}</p>
+                        </div>
+                        {s.unreadCount > 0 ? <span className="admin-user-unread">{s.unreadCount}</span> : null}
+                      </div>
+                      <div className="admin-user-card-meta">
+                        <span>Page: {getPagePath(s.pageUrl)} | Source: Direct</span>
+                        <span>{formatSessionTime(s.lastSeenAt || s.createdAt)}</span>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </aside>
+
+          <main className="admin-chat-panel">
+            {adminNotices.length > 0 ? (
+              <div className="admin-notice-list">
+                {adminNotices.slice(0, 3).map((n) => (
+                  <div key={n._id} className={`admin-notice ${n.read ? "read" : ""}`}>
+                    <div>
+                      <span className="admin-notice-subject">{n.subject}</span>
+                      <p>{n.message}</p>
+                    </div>
+                    {!n.read ? (
+                      <button type="button" onClick={() => markTenantAdminMessageRead(token, n._id).then(loadAdminNotices)}>
+                        Mark read
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <header className="admin-chat-head">
+              {selectedSession ? (
+                <div className="admin-chat-head-info">
+                  <div className="admin-chat-head-title">
+                    <span className="admin-chat-customer-name">
+                      {selectedSession.name}
+                      {selectedSession.email ? ` (${selectedSession.email})` : ""}
+                    </span>
+                    <span className="admin-chat-online-pill">
+                      <span className="admin-online-dot" aria-hidden="true" />
+                      {selectedSession.status === "online" ? "Online" : selectedSession.status || "Offline"}
+                    </span>
+                  </div>
+                  <div className="admin-chat-meta">
+                    <span>Chrome</span>
+                    <span>Windows</span>
+                    <span>Pune, India</span>
+                    <span>IP: —</span>
+                  </div>
                 </div>
-                {!n.read ? (
-                  <button onClick={() => markTenantAdminMessageRead(token, n._id).then(loadAdminNotices)}>
-                    Mark read
+              ) : (
+                <div className="admin-chat-head-info">
+                  <p className="admin-chat-empty-title">Select a conversation</p>
+                  <p className="admin-chat-head-hint">Choose an active user to start chatting.</p>
+                </div>
+              )}
+              <div className="admin-chat-head-actions">
+                {!voiceCallActive ? (
+                  <button
+                    type="button"
+                    className="admin-btn-outline admin-call-btn"
+                    onClick={startVoiceCall}
+                    disabled={!sessionId}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <path
+                        d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    Call
                   </button>
                 ) : null}
-              </div>
-            ))}
-          </div>
-        ) : null}
-        <header className="chat-head">
-          <strong>{activeLabel}</strong>
-          <div className="chat-head-actions">
-            {!voiceCallActive ? (
-              <VoiceCallStartButton onClick={startVoiceCall} disabled={!sessionId} />
-            ) : null}
-            {screenViewing ? (
-              <button type="button" className="screen-share-stop-btn" onClick={stopScreenView}>
-                Stop screen view
-              </button>
-            ) : null}
-          </div>
-        </header>
-        <audio ref={remoteVoiceAudioRef} autoPlay playsInline className="voice-call-audio-sink" />
-        <VoiceCallBar
-          inCall={voiceCallActive}
-          selfMuted={selfVoiceMuted}
-          remoteMuted={remoteVoiceMuted}
-          isAdmin
-          remoteLabel={selectedSession?.name || "Customer"}
-          customerMutedByAdmin={customerMutedByAdmin}
-          onToggleSelfMute={toggleSelfVoiceMute}
-          onToggleCustomerMute={toggleCustomerVoiceMute}
-          onEndCall={endVoiceCall}
-        />
-        <div
-          ref={screenSharePanelRef}
-          className={screenViewing ? "admin-screen-share-panel" : "admin-screen-share-video-mount"}
-        >
-          <div
-            className="admin-screen-share-stage"
-            onDoubleClick={screenViewing ? toggleScreenShareFullscreen : undefined}
-          >
-            <video
-              ref={screenVideoRef}
-              autoPlay
-              playsInline
-              muted
-              className={screenViewing ? "admin-screen-share-video" : "admin-screen-share-video-sink"}
-            />
-            {screenViewing ? (
-              <div className="admin-screen-share-toolbar">
-                <span>Live screen from customer</span>
+                {screenViewing ? (
+                  <button type="button" className="admin-btn-outline danger" onClick={stopScreenView}>
+                    Stop screen
+                  </button>
+                ) : null}
+                <button type="button" className="admin-btn-outline admin-more-btn" aria-label="More options">
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <circle cx="12" cy="5" r="1.8" />
+                    <circle cx="12" cy="12" r="1.8" />
+                    <circle cx="12" cy="19" r="1.8" />
+                  </svg>
+                </button>
                 <button
                   type="button"
-                  className="admin-screen-share-fullscreen-btn"
-                  onClick={toggleScreenShareFullscreen}
-                  onDoubleClick={(e) => e.stopPropagation()}
-                  aria-label={screenShareFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-                  title={screenShareFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen (double-click video)"}
+                  className="admin-btn-primary"
+                  disabled={!selectedSession}
+                  onClick={() => setShowUserDetails((v) => !v)}
                 >
-                  {screenShareFullscreen ? <FullscreenExitIcon /> : <FullscreenEnterIcon />}
+                  User Details
+                </button>
+              </div>
+            </header>
+
+            {showUserDetails && selectedSession ? (
+              <div className="admin-user-details-strip">
+                <span><span className="admin-detail-label">Email:</span> {selectedSession.email || "—"}</span>
+                <span><span className="admin-detail-label">Phone:</span> {selectedSession.phone || "—"}</span>
+                <span><span className="admin-detail-label">Page:</span> {selectedSession.pageUrl || "—"}</span>
+                <button type="button" className="admin-user-details-close" onClick={() => setShowUserDetails(false)}>
+                  Close
                 </button>
               </div>
             ) : null}
-          </div>
+
+            <audio ref={remoteVoiceAudioRef} autoPlay playsInline className="voice-call-audio-sink" />
+            <VoiceCallBar
+              inCall={voiceCallActive}
+              selfMuted={selfVoiceMuted}
+              remoteMuted={remoteVoiceMuted}
+              isAdmin
+              remoteLabel={selectedSession?.name || "Customer"}
+              customerMutedByAdmin={customerMutedByAdmin}
+              onToggleSelfMute={toggleSelfVoiceMute}
+              onToggleCustomerMute={toggleCustomerVoiceMute}
+              onEndCall={endVoiceCall}
+            />
+            <div
+              ref={screenSharePanelRef}
+              className={screenViewing ? "admin-screen-share-panel" : "admin-screen-share-video-mount"}
+            >
+              <div
+                className="admin-screen-share-stage"
+                onDoubleClick={screenViewing ? toggleScreenShareFullscreen : undefined}
+              >
+                <video
+                  ref={screenVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className={screenViewing ? "admin-screen-share-video" : "admin-screen-share-video-sink"}
+                />
+                {screenViewing ? (
+                  <div className="admin-screen-share-toolbar">
+                    <span>Live screen from customer</span>
+                    <button
+                      type="button"
+                      className="admin-screen-share-fullscreen-btn"
+                      onClick={toggleScreenShareFullscreen}
+                      onDoubleClick={(e) => e.stopPropagation()}
+                      aria-label={screenShareFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                      title={screenShareFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen (double-click video)"}
+                    >
+                      {screenShareFullscreen ? <FullscreenExitIcon /> : <FullscreenEnterIcon />}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <MessageList
+              messages={messages}
+              me="user"
+              variant="adminConsole"
+              agentName="Admin"
+              typingText={typing ? `${selectedSession?.name || "User"} is typing...` : ""}
+            />
+
+            <form className="admin-compose" onSubmit={sendMessage}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="chat-file-input"
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip"
+                onChange={handleFileSelect}
+              />
+              <div className="admin-compose-toolbar">
+                <button
+                  type="button"
+                  className="admin-compose-icon-btn"
+                  disabled={!sessionId || uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                  aria-label="Attach file"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <button type="button" className="admin-compose-icon-btn" aria-label="Emoji" disabled={!sessionId}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01" strokeLinecap="round" />
+                  </svg>
+                </button>
+                <span className="admin-compose-hint">Press / for shortcuts</span>
+              </div>
+              <textarea
+                disabled={!sessionId || uploading}
+                value={text}
+                onChange={(e) => onType(e.target.value)}
+                placeholder={
+                  uploading
+                    ? "Uploading..."
+                    : selectedSession
+                      ? `Reply to ${selectedSession.name}...`
+                      : "Select a conversation"
+                }
+                rows={2}
+              />
+              <div className="admin-compose-actions">
+                <button
+                  type="button"
+                  className="admin-btn-outline"
+                  disabled={!sessionId}
+                  onClick={() => toast.info("Canned responses coming soon")}
+                >
+                  Insert Canned Response
+                </button>
+                <button type="submit" className="admin-btn-primary send" disabled={!sessionId || uploading}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <path d="m22 2-7 20-4-9-9-4 20-7Z" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Send
+                </button>
+              </div>
+            </form>
+          </main>
         </div>
-        <MessageList messages={messages} me="admin" typingText={typing ? "User is typing..." : ""} />
-        <form className="chat-compose admin-chat-compose" onSubmit={sendMessage}>
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="chat-file-input"
-            accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip"
-            onChange={handleFileSelect}
-          />
-          <button
-            type="button"
-            className="admin-compose-attach"
-            disabled={!sessionId || uploading}
-            onClick={() => fileInputRef.current?.click()}
-            aria-label="Attach file"
-          >
-            📎
-          </button>
-          <input
-            disabled={!sessionId || uploading}
-            value={text}
-            onChange={(e) => onType(e.target.value)}
-            placeholder={uploading ? "Uploading..." : sessionId ? "Reply to customer..." : "Select a conversation"}
-          />
-          <button disabled={!sessionId || uploading}>Send</button>
-        </form>
-      </main>
       </div>
 
       {incomingVoiceCall ? (

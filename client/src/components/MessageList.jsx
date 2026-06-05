@@ -81,7 +81,7 @@ function MessageBody({ message }) {
       <div className="chat-call-log-body">
         <CallLogIcon status={callLog.status} />
         <div>
-          <strong>{getCallLogTitle(callLog)}</strong>
+          <span className="chat-call-log-title">{getCallLogTitle(callLog)}</span>
           <small>{getCallLogDetails(callLog)}</small>
         </div>
       </div>
@@ -109,7 +109,7 @@ function MessageBody({ message }) {
         <a href={href} target="_blank" rel="noopener noreferrer" className="bubble-file" download={attachment.filename}>
           <span className="bubble-file-icon" aria-hidden="true">📎</span>
           <span className="bubble-file-meta">
-            <strong>{attachment.filename || "File"}</strong>
+            <span className="bubble-file-name">{attachment.filename || "File"}</span>
             <small>{formatFileSize(attachment.size)}</small>
           </span>
         </a>
@@ -121,7 +121,14 @@ function MessageBody({ message }) {
   return <p>{message.message}</p>;
 }
 
-export default function MessageList({ messages, me, typingText, agentName = "Support", agentAvatar = "" }) {
+export default function MessageList({
+  messages,
+  me,
+  typingText,
+  agentName = "Support",
+  agentAvatar = "",
+  variant = "",
+}) {
   const listRef = useRef(null);
   const agentInitials = useMemo(() => {
     const parts = String(agentName || "Support")
@@ -164,8 +171,10 @@ export default function MessageList({ messages, me, typingText, agentName = "Sup
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages, typingText]);
 
+  const listClass = variant ? `messages messages-${variant}` : "messages";
+
   return (
-    <div ref={listRef} className="messages">
+    <div ref={listRef} className={listClass}>
       <div className="messages-content">
         {groupedMessages.map((item) => {
           if (item.type === "date") {
