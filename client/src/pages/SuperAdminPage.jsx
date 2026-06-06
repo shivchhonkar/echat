@@ -26,8 +26,12 @@ const KPI_ITEMS = [
 
 export default function SuperAdminPage() {
   const [token, setToken] = useState(localStorage.getItem("super_admin_token") || "");
-  const [mobile, setMobile] = useState(localStorage.getItem("super_admin_mobile") || "");
-  const [dob, setDob] = useState("04/04/1992");
+  const [loginMobile, setLoginMobile] = useState("");
+  const [dob, setDob] = useState("");
+  const [sessionMobile, setSessionMobile] = useState(() => {
+    if (!localStorage.getItem("super_admin_token")) return "";
+    return sessionStorage.getItem("super_admin_mobile") || "";
+  });
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [devOtpHint, setDevOtpHint] = useState("");
@@ -58,14 +62,18 @@ export default function SuperAdminPage() {
     load();
   }, [token]);
 
+  useEffect(() => {
+    localStorage.removeItem("super_admin_mobile");
+  }, []);
+
   async function requestOtp(e) {
     e.preventDefault();
-    if (!mobile.trim()) return toast.error("Mobile number is required");
+    if (!loginMobile.trim()) return toast.error("Mobile number is required");
     if (!dob.trim()) return toast.error("DOB is required");
     setOtpLoading(true);
     try {
       setError("");
-      const result = await requestSuperAdminOtp(mobile, dob);
+      const result = await requestSuperAdminOtp(loginMobile, dob);
       setOtpSent(true);
       setDevOtpHint(result.otp || "");
       toast.success(result.smsSent === false ? "OTP generated (check server logs in dev)" : "OTP sent to your mobile");
@@ -83,10 +91,13 @@ export default function SuperAdminPage() {
     setOtpLoading(true);
     try {
       setError("");
-      const result = await verifySuperAdminOtp(mobile, otp);
+      const result = await verifySuperAdminOtp(loginMobile, otp);
       localStorage.setItem("super_admin_token", result.token);
-      localStorage.setItem("super_admin_mobile", mobile);
+      sessionStorage.setItem("super_admin_mobile", loginMobile);
+      setSessionMobile(loginMobile);
       setToken(result.token);
+      setLoginMobile("");
+      setDob("");
       setOtp("");
       setOtpSent(false);
       setDevOtpHint("");
@@ -102,6 +113,8 @@ export default function SuperAdminPage() {
   function resetOtpStep() {
     setOtpSent(false);
     setOtp("");
+    setLoginMobile("");
+    setDob("");
     setDevOtpHint("");
     setError("");
   }
@@ -109,7 +122,11 @@ export default function SuperAdminPage() {
   function handleSignOut() {
     localStorage.removeItem("super_admin_token");
     localStorage.removeItem("super_admin_mobile");
+    sessionStorage.removeItem("super_admin_mobile");
     setToken("");
+    setLoginMobile("");
+    setDob("");
+    setSessionMobile("");
     setOtp("");
     setOtpSent(false);
     setDevOtpHint("");
@@ -272,7 +289,11 @@ export default function SuperAdminPage() {
             </ul>
           </section>
 
-          <form className="admin-auth-card super-admin-auth-card" onSubmit={otpSent ? verifyOtp : requestOtp}>
+          <form
+            className="admin-auth-card super-admin-auth-card"
+            onSubmit={otpSent ? verifyOtp : requestOtp}
+            autoComplete="off"
+          >
             <div className="admin-auth-card-head">
               <span className="admin-auth-card-icon super-admin-auth-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -284,7 +305,7 @@ export default function SuperAdminPage() {
                 <h2 className="admin-auth-card-title">Platform super admin</h2>
                 <p className="admin-auth-card-subtitle">
                   {otpSent
-                    ? `OTP sent to ${mobile}. Enter the code to continue.`
+                    ? `OTP sent to ${loginMobile}. Enter the code to continue.`
                     : "Verify with authorized mobile number and date of birth."}
                 </p>
               </div>
@@ -301,11 +322,12 @@ export default function SuperAdminPage() {
                   <label htmlFor="super-admin-mobile">Mobile number</label>
                   <input
                     id="super-admin-mobile"
-                    value={mobile}
-                    onChange={(e) => setMobile(e.target.value)}
+                    name="super-admin-mobile"
+                    value={loginMobile}
+                    onChange={(e) => setLoginMobile(e.target.value)}
                     placeholder="Enter valid mobile number"
                     inputMode="numeric"
-                    autoComplete="tel"
+                    autoComplete="off"
                     required
                   />
                 </div>
@@ -313,10 +335,11 @@ export default function SuperAdminPage() {
                   <label htmlFor="super-admin-dob">Date of birth</label>
                   <input
                     id="super-admin-dob"
+                    name="super-admin-dob"
                     value={dob}
                     onChange={(e) => setDob(e.target.value)}
                     placeholder="DD/MM/YYYY"
-                    autoComplete="bday"
+                    autoComplete="off"
                     required
                   />
                   {/* <span className="admin-auth-field-hint">
@@ -328,7 +351,7 @@ export default function SuperAdminPage() {
               <>
                 <div className="super-admin-auth-sent-to">
                   <span>Signing in as</span>
-                  <span className="super-admin-auth-sent-value">{mobile}</span>
+                  <span className="super-admin-auth-sent-value">{loginMobile}</span>
                   <button type="button" className="super-admin-auth-change" onClick={resetOtpStep}>
                     Change
                   </button>
@@ -385,7 +408,7 @@ export default function SuperAdminPage() {
           onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
           onSignOut={() => setConfirmSignout(true)}
           profileInitials="SA"
-          profileName={maskMobile(mobile)}
+          profileName={maskMobile(sessionMobile)}
           showOnlinePill={false}
         />
 

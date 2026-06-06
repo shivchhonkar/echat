@@ -5,6 +5,7 @@ import TenantSignupPage from "./pages/TenantSignupPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
 import HomePage from "./pages/HomePage";
 import ToastContainer from "./components/ToastContainer";
+import PageMeta from "./components/PageMeta";
 
 function RootEntry() {
   const location = useLocation();
@@ -15,6 +16,7 @@ function RootEntry() {
 export default function App() {
   return (
     <>
+      <PageMeta />
       <Routes>
         <Route path="/" element={<RootEntry />} />
         <Route path="/widget" element={<WidgetPage />} />
