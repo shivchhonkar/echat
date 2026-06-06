@@ -1,3 +1,6 @@
+import { Link } from "react-router-dom";
+import { adminSectionToPath } from "../../utils/adminRoutes";
+
 function NavIcon({ children }) {
   return <span className="admin-nav-icon" aria-hidden="true">{children}</span>;
 }
@@ -118,6 +121,32 @@ function LogsIcon() {
   );
 }
 
+function MegaphoneIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="m3 11 7-7v18l-7-7H1V11h2Z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M14 8.5a5 5 0 0 1 0 7M17 6a8 8 0 0 1 0 12" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function SmsCampaignIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9 9h6M9 13h4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function WhatsAppIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M21 11.5a8.5 8.5 0 0 1-9.9 8.3L3 21l1.2-7.1A8.5 8.5 0 1 1 21 11.5Z" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function HelpIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -127,12 +156,37 @@ function HelpIcon() {
   );
 }
 
-function NavItem({ icon, label, active, badge, collapsed }) {
-  return (
-    <button type="button" className={`admin-nav-item ${active ? "active" : ""}`} title={collapsed ? label : undefined}>
+function NavItem({ icon, label, active, badge, collapsed, onClick, to }) {
+  const className = `admin-nav-item ${active ? "active" : ""}`;
+  const content = (
+    <>
       <NavIcon>{icon}</NavIcon>
       {!collapsed ? <span className="admin-nav-label">{label}</span> : null}
       {!collapsed && badge != null ? <span className="admin-nav-badge">{badge}</span> : null}
+    </>
+  );
+
+  if (to) {
+    return (
+      <Link
+        to={to}
+        className={className}
+        title={collapsed ? label : undefined}
+        onClick={onClick}
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className={className}
+      title={collapsed ? label : undefined}
+      onClick={onClick}
+    >
+      {content}
     </button>
   );
 }
@@ -147,17 +201,49 @@ function NavSection({ title, collapsed, children }) {
   );
 }
 
-export default function AdminSidebar({ activeCount = 0, collapsed = false }) {
+export default function AdminSidebar({
+  activeCount = 0,
+  collapsed = false,
+  activeSection = "active-users",
+}) {
+  const inboxPath = adminSectionToPath("active-users");
+
   return (
     <aside className={`admin-console-sidebar ${collapsed ? "collapsed" : ""}`}>
       <nav className="admin-sidebar-nav">
-        <NavItem icon={<HomeIcon />} label="Dashboard" />
+        <NavItem icon={<HomeIcon />} label="Dashboard" to={inboxPath} active={activeSection === "active-users"} />
         <NavSection title="CONVERSATIONS" collapsed={collapsed}>
-          <NavItem icon={<UsersIcon />} label="Active Users" active badge={activeCount || undefined} />
-          <NavItem icon={<ChatIcon />} label="All Conversations" />
-          <NavItem icon={<EyeIcon />} label="Visitors" />
-          <NavItem icon={<HistoryIcon />} label="History" />
-          <NavItem icon={<ContactIcon />} label="Contacts" />
+          <NavItem
+            icon={<UsersIcon />}
+            label="Active Users"
+            to={inboxPath}
+            active={activeSection === "active-users"}
+            badge={activeCount || undefined}
+          />
+          <NavItem icon={<ChatIcon />} label="All Conversations" to={inboxPath} />
+          <NavItem icon={<EyeIcon />} label="Visitors" to={inboxPath} />
+          <NavItem icon={<HistoryIcon />} label="History" to={inboxPath} />
+          <NavItem icon={<ContactIcon />} label="Contacts" to={inboxPath} />
+        </NavSection>
+        <NavSection title="CAMPAIGN MANAGER" collapsed={collapsed}>
+          <NavItem
+            icon={<SmsCampaignIcon />}
+            label="Bulk SMS"
+            to={adminSectionToPath("campaign-sms")}
+            active={activeSection === "campaign-sms"}
+          />
+          <NavItem
+            icon={<WhatsAppIcon />}
+            label="WhatsApp Promotions"
+            to={adminSectionToPath("campaign-whatsapp")}
+            active={activeSection === "campaign-whatsapp"}
+          />
+          <NavItem
+            icon={<MegaphoneIcon />}
+            label="Campaign History"
+            to={adminSectionToPath("campaign-history")}
+            active={activeSection === "campaign-history"}
+          />
         </NavSection>
         <NavSection title="CUSTOMIZATION" collapsed={collapsed}>
           <NavItem icon={<PaletteIcon />} label="Appearance" />

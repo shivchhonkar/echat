@@ -34,7 +34,14 @@ function ChevronIcon() {
   );
 }
 
-export default function AdminTopBar({ noticeCount = 0, onToggleSidebar, onSignOut }) {
+export default function AdminTopBar({
+  noticeCount = 0,
+  onToggleSidebar,
+  onSignOut,
+  profileInitials = "A",
+  profileName = "Admin",
+  showOnlinePill = true,
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -60,10 +67,12 @@ export default function AdminTopBar({ noticeCount = 0, onToggleSidebar, onSignOu
         </button>
       </div>
       <div className="admin-topbar-right">
-        <div className="admin-online-pill">
-          <span className="admin-online-dot" aria-hidden="true" />
-          Online
-        </div>
+        {showOnlinePill ? (
+          <div className="admin-online-pill">
+            <span className="admin-online-dot" aria-hidden="true" />
+            Online
+          </div>
+        ) : null}
         <button type="button" className="admin-icon-btn admin-notify-btn" aria-label="Notifications">
           <BellIcon />
           {noticeCount > 0 ? <span className="admin-notify-badge">{noticeCount > 9 ? "9+" : noticeCount}</span> : null}
@@ -76,8 +85,8 @@ export default function AdminTopBar({ noticeCount = 0, onToggleSidebar, onSignOu
             aria-expanded={menuOpen}
             aria-haspopup="menu"
           >
-            <span className="admin-profile-avatar" aria-hidden="true">A</span>
-            <span className="admin-profile-name">Admin</span>
+            <span className="admin-profile-avatar" aria-hidden="true">{profileInitials}</span>
+            <span className="admin-profile-name">{profileName}</span>
             <ChevronIcon />
           </button>
           {menuOpen ? (

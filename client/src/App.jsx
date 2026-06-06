@@ -18,7 +18,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<RootEntry />} />
         <Route path="/widget" element={<WidgetPage />} />
-        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin/*" element={<AdminPage />} />
         <Route path="/signup" element={<TenantSignupPage />} />
         <Route path="/super-admin" element={<SuperAdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { SOCKET_EVENTS } from "@echat/shared/events";
 import { adminLogin, getMessages, getSessions, getTenantAdminMessages, markTenantAdminMessageRead, uploadAttachment } from "../api";
 import { createAdminSocket } from "../socket";
@@ -12,6 +13,7 @@ import Header from "../components/Header";
 import Footer from "../components/Footer";
 import AdminSidebar from "../components/admin/AdminSidebar";
 import AdminTopBar from "../components/admin/AdminTopBar";
+import CampaignManagerPanel from "../components/admin/CampaignManagerPanel";
 import {
   countOnlineSessions,
   filterSessions,
@@ -21,6 +23,7 @@ import {
   getPagePath,
   getWebsiteFromUrl,
 } from "../utils/adminSessionFormat";
+import { isKnownAdminPath, normalizeAdminPath, pathToAdminSection } from "../utils/adminRoutes";
 import { toast } from "../utils/toast";
 
 function getFullscreenElement() {
@@ -72,6 +75,8 @@ function notifySound() {
 }
 
 export default function AdminPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [token, setToken] = useState(localStorage.getItem("admin_token") || "");
   const [tenantSlug, setTenantSlug] = useState(localStorage.getItem("admin_tenant_slug") || "default");
   const [email, setEmail] = useState("admin@example.com");
@@ -86,6 +91,19 @@ export default function AdminPage() {
   const [sessionSearch, setSessionSearch] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showUserDetails, setShowUserDetails] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const adminSection = useMemo(
+    () => pathToAdminSection(location.pathname),
+    [location.pathname]
+  );
+
+  useEffect(() => {
+    const path = normalizeAdminPath(location.pathname);
+    if (path.startsWith("/admin") && !isKnownAdminPath(path)) {
+      navigate("/admin", { replace: true });
+    }
+  }, [location.pathname, navigate]);
   const socketRef = useRef(null);
   const typingTimer = useRef(null);
   const fileInputRef = useRef(null);
@@ -424,6 +442,7 @@ export default function AdminPage() {
     if (!tenantSlug.trim()) return toast.error("Tenant slug is required");
     if (!email.trim()) return toast.error("Email is required");
     if (!password.trim()) return toast.error("Password is required");
+    setLoginLoading(true);
     try {
       const { token: newToken } = await adminLogin(email, password, tenantSlug);
       localStorage.setItem("admin_token", newToken);
@@ -432,6 +451,8 @@ export default function AdminPage() {
       toast.success("Admin login successful");
     } catch (err) {
       toast.error(err.message || "Login failed");
+    } finally {
+      setLoginLoading(false);
     }
   }
 
@@ -534,19 +555,97 @@ export default function AdminPage() {
     return (
       <div className="admin-auth-wrap">
         <Header />
-        <form className="panel admin-auth-panel" onSubmit={handleLogin}>
-          <h2 className="font-normal" style={{ fontSize: "24px", fontWeight: "500" }}>Admin Login</h2>
-          <p className="muted">Access your tenant support inbox with slug-based login.</p>
-          <input value={tenantSlug} onChange={(e) => setTenantSlug(e.target.value)} placeholder="Tenant slug (e.g. default)" />
-          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" />
-          <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="Password" />
-          <button className="primary-cta">Login</button>
-          <div className="admin-auth-links">
-            <a className="text-link" href="/signup">Create new tenant</a>
-            <a className="text-link" href="/super-admin">Open platform admin</a>
-            <a className="text-link" href="/">Back to home</a>
-          </div>
-        </form>
+        <main className="admin-auth-main">
+          <section className="admin-auth-hero" aria-hidden="false">
+            <div className="admin-auth-hero-badge">Tenant workspace</div>
+            <h1 className="admin-auth-hero-title">Sign in to your support console</h1>
+            <p className="admin-auth-hero-text">
+              Manage live chats, voice calls, screen sharing, and promotional campaigns from one admin dashboard.
+            </p>
+            <ul className="admin-auth-hero-list">
+              <li>Real-time active user inbox</li>
+              <li>Voice calling and customer screen view</li>
+              <li>SMS and WhatsApp campaign manager</li>
+            </ul>
+          </section>
+
+          <form className="admin-auth-card" onSubmit={handleLogin}>
+            <div className="admin-auth-card-head">
+              <span className="admin-auth-card-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <path d="M7 8h10M7 12h6" strokeLinecap="round" />
+                </svg>
+              </span>
+              <div>
+                <h2 className="admin-auth-card-title">Admin login</h2>
+                <p className="admin-auth-card-subtitle">Use your tenant slug and admin credentials.</p>
+              </div>
+            </div>
+
+            <div className="admin-auth-field">
+              <label htmlFor="admin-tenant-slug">Tenant slug</label>
+              <input
+                id="admin-tenant-slug"
+                value={tenantSlug}
+                onChange={(e) => setTenantSlug(e.target.value)}
+                placeholder="e.g. default or testme1"
+                autoComplete="organization"
+                required
+              />
+            </div>
+
+            <div className="admin-auth-field">
+              <label htmlFor="admin-email">Admin email</label>
+              <input
+                id="admin-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@example.com"
+                autoComplete="username"
+                required
+              />
+            </div>
+
+            <div className="admin-auth-field">
+              <label htmlFor="admin-password">Password</label>
+              <div className="admin-auth-password-wrap">
+                <input
+                  id="admin-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  type={showLoginPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  className="admin-auth-password-toggle"
+                  onClick={() => setShowLoginPassword((v) => !v)}
+                  aria-label={showLoginPassword ? "Hide password" : "Show password"}
+                >
+                  {showLoginPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" className="admin-auth-submit" disabled={loginLoading}>
+              {loginLoading ? "Signing in..." : "Sign in"}
+            </button>
+
+            <div className="admin-auth-divider">
+              <span>New here?</span>
+            </div>
+
+            <div className="admin-auth-links">
+              <a className="admin-auth-link" href="/signup">Create new tenant</a>
+              <a className="admin-auth-link" href="/super-admin">Platform admin</a>
+              <a className="admin-auth-link muted-link" href="/">Back to home</a>
+            </div>
+          </form>
+        </main>
         <Footer />
       </div>
     );
@@ -554,7 +653,11 @@ export default function AdminPage() {
 
   return (
     <div className="admin-console">
-      <AdminSidebar activeCount={onlineCount} collapsed={sidebarCollapsed} />
+      <AdminSidebar
+        activeCount={onlineCount}
+        collapsed={sidebarCollapsed}
+        activeSection={adminSection}
+      />
       <div className="admin-console-main">
         <AdminTopBar
           noticeCount={unreadNoticeCount || adminNotices.length}
@@ -592,6 +695,9 @@ export default function AdminPage() {
           </div>
         </div>
 
+        {adminSection.startsWith("campaign-") ? (
+          <CampaignManagerPanel section={adminSection} token={token} />
+        ) : (
         <div className="admin-console-body">
           <aside className="admin-users-panel">
             <div className="admin-users-head">
@@ -874,6 +980,7 @@ export default function AdminPage() {
             </form>
           </main>
         </div>
+        )}
       </div>
 
       {incomingVoiceCall ? (

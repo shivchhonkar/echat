@@ -6,11 +6,25 @@ import { UserSession } from "../models/UserSession.js";
 import { Message } from "../models/Message.js";
 import { TenantAdminMessage } from "../models/TenantAdminMessage.js";
 import { ActivityLog } from "../models/ActivityLog.js";
+import { sendOtpSms } from "../services/twoFactorSms.js";
 
 const router = Router();
 const otpStore = new Map();
-const allowedMobiles = new Set(["9528466566", "9650593896"]);
-const requiredDob = "04/04/1992";
+const DEFAULT_ALLOWED_MOBILES = ["9528466566", "9650593896"];
+const DEFAULT_SUPER_ADMIN_DOB = "04/04/1992";
+
+function getAllowedMobiles() {
+  const fromEnv = process.env.SUPER_ADMIN_MOBILES || process.env.SUPER_ADMIN_MOBILE || "";
+  const parsed = String(fromEnv)
+    .split(/[,;\s]+/)
+    .map(normalizeMobile)
+    .filter((m) => m.length === 10);
+  return new Set(parsed.length ? parsed : DEFAULT_ALLOWED_MOBILES);
+}
+
+function getRequiredDob() {
+  return String(process.env.SUPER_ADMIN_DOB || DEFAULT_SUPER_ADMIN_DOB).trim();
+}
 
 function normalizeMobile(input = "") {
   const digits = String(input).replace(/\D/g, "");
@@ -53,18 +67,41 @@ async function logSuperAdminAction(req, action, status = "success", details = ""
 router.post("/request-otp", async (req, res) => {
   const mobile = normalizeMobile(req.body?.mobile);
   const dob = normalizeDob(req.body?.dob);
+  const allowedMobiles = getAllowedMobiles();
+  const requiredDob = getRequiredDob();
+  const isDev = process.env.NODE_ENV !== "production";
+
   if (!mobile || !dob) return res.status(400).json({ error: "Mobile and DOB are required" });
-  if (!allowedMobiles.has(mobile)) return res.status(403).json({ error: "Mobile number is not authorized" });
+  if (!allowedMobiles.has(mobile)) {
+    return res.status(403).json({ error: "Mobile number is not authorized for super admin access" });
+  }
   if (dob !== requiredDob) return res.status(403).json({ error: "DOB validation failed" });
 
   const otp = String(Math.floor(100000 + Math.random() * 900000));
   otpStore.set(mobile, { otp, expiresAt: Date.now() + 5 * 60 * 1000 });
-  console.log(`[SUPER_ADMIN_OTP] mobile=${mobile} otp=${otp}`);
+
+  let smsSent = false;
+  let smsError = "";
+  try {
+    await sendOtpSms(mobile, otp, "login");
+    smsSent = true;
+    console.log(`[SUPER_ADMIN_OTP] SMS sent to ${mobile}`);
+  } catch (err) {
+    smsError = err?.message || "Failed to send OTP via SMS";
+    console.error(`[SUPER_ADMIN_OTP] SMS failed mobile=${mobile}:`, smsError);
+    console.log(`[SUPER_ADMIN_OTP] mobile=${mobile} otp=${otp}`);
+  }
+
+  if (!smsSent && !isDev) {
+    otpStore.delete(mobile);
+    return res.status(503).json({ error: smsError || "Failed to send OTP. Try again later." });
+  }
 
   return res.json({
     success: true,
-    message: "OTP sent",
-    ...(process.env.NODE_ENV !== "production" ? { otp } : {})
+    message: smsSent ? "OTP sent to your mobile number" : "OTP generated (SMS delivery unavailable)",
+    smsSent,
+    ...(isDev ? { otp } : {}),
   });
 });
 
@@ -72,6 +109,9 @@ router.post("/verify-otp", async (req, res) => {
   const mobile = normalizeMobile(req.body?.mobile);
   const otp = String(req.body?.otp || "").trim();
   if (!mobile || !otp) return res.status(400).json({ error: "Mobile and OTP are required" });
+  if (!getAllowedMobiles().has(mobile)) {
+    return res.status(403).json({ error: "Mobile number is not authorized for super admin access" });
+  }
 
   const entry = otpStore.get(mobile);
   if (!entry || entry.expiresAt < Date.now() || entry.otp !== otp) {

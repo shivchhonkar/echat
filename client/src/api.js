@@ -192,6 +192,62 @@ export async function uploadAttachment(file, sessionId, { token, tenantKey } = {
   return data;
 }
 
+export async function getCampaignConfig(token) {
+  const res = await fetch(`${API_URL}/api/admin/campaigns/config`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to load campaign config");
+  return data;
+}
+
+export async function getCampaigns(token, { channel } = {}) {
+  const query = channel ? `?channel=${encodeURIComponent(channel)}` : "";
+  const res = await fetch(`${API_URL}/api/admin/campaigns${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to fetch campaigns");
+  return data;
+}
+
+export async function getWhatsAppTemplates(token) {
+  const res = await fetch(`${API_URL}/api/admin/campaigns/whatsapp/templates`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to load WhatsApp templates");
+  return data;
+}
+
+export async function sendBulkWhatsAppCampaign(token, payload) {
+  const res = await fetch(`${API_URL}/api/admin/campaigns/whatsapp/bulk`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || data.hint || "Bulk WhatsApp campaign failed");
+  return data;
+}
+
+export async function sendBulkSmsCampaign(token, payload) {
+  const res = await fetch(`${API_URL}/api/admin/campaigns/sms/bulk`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Bulk SMS campaign failed");
+  return data;
+}
+
 export function resolveAssetUrl(url) {
   if (!url) return "";
   if (/^https?:\/\//i.test(url)) return url;
