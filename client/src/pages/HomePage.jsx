@@ -1,5 +1,6 @@
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import EmbedHowToSection from "../components/EmbedHowToSection";
 
 export default function HomePage() {
   return (
@@ -52,6 +53,8 @@ export default function HomePage() {
             <article><h3>Secure Access</h3><p>OTP super-admin login, tenant-level auth, and protected APIs.</p></article>
           </div>
         </section>
+
+        <EmbedHowToSection />
 
         {/* <section className="billint-cta-band">
           <h2>Ready to simplify customer support for your business?</h2>

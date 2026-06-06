@@ -3,23 +3,7 @@ import { tenantSignup } from "../api";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { toast } from "../utils/toast";
-
-const WIDGET_PROD_URL = "https://care.shribi.com";
-const WIDGET_DEV_URL = "http://localhost:6001";
-
-function buildInstallSnippet(widgetKey) {
-  return `<script>
-  window.WeChatSupportConfig = {
-    widgetKey: "${widgetKey}",
-    widgetBaseUrl: "${WIDGET_PROD_URL}",
-    title: "Support Chat",
-    tagline: "We're here to help!"
-  };
-</script>
-<script src="${WIDGET_PROD_URL}/embed.js" async></script>
-
-<!-- Local dev: widgetBaseUrl "${WIDGET_DEV_URL}" and script src "${WIDGET_DEV_URL}/embed.js" -->`;
-}
+import { buildInstallSnippet } from "../utils/embedSnippet";
 
 export default function TenantSignupPage() {
   const [businessName, setBusinessName] = useState("");
